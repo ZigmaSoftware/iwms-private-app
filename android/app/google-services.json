@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "512791466325",
+    "project_id": "iwmsgovernmentapp",
+    "storage_bucket": "iwmsgovernmentapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:512791466325:android:e24094afe52d479793dfdc",
+        "android_client_info": {
+          "package_name": "com.example.iwms_citizen_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBq2_sjWo6BIodHL8LX6yXrg2Rihg3ObI8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
