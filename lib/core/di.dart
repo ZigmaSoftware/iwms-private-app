@@ -2,21 +2,21 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
+import 'package:iwms_private_app/data/repositories/assignment_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/logic/operator_trip_bloc.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
-import 'package:iwms_citizen_app/shared/services/collection_history_service.dart';
-import 'package:iwms_citizen_app/shared/services/notification_service.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
-import 'package:iwms_citizen_app/data/repositories/site_repository.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/modules/module3_operator/logic/operator_trip_bloc.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
+import 'package:iwms_private_app/shared/services/collection_history_service.dart';
+import 'package:iwms_private_app/shared/services/notification_service.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
+import 'package:iwms_private_app/data/repositories/site_repository.dart';
 
 // --- Vehicle Tracking Imports ---
-import 'package:iwms_citizen_app/data/repositories/vehicle_repository.dart';
-import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
+import 'package:iwms_private_app/data/repositories/vehicle_repository.dart';
+import 'package:iwms_private_app/logic/vehicle_tracking/vehicle_bloc.dart';
 // --- End Vehicle Tracking Imports ---
 
 import 'api_config.dart';

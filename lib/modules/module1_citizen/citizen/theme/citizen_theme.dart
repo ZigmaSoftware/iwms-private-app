@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
-import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_private_app/core/theme/app_text_styles.dart';
+import 'package:iwms_private_app/core/ui/app_ui_tokens.dart';
 
 /// Royal premium blue palette for the Citizen module ONLY.
 ///

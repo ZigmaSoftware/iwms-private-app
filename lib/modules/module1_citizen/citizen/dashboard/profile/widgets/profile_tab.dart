@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
-import 'package:iwms_citizen_app/logic/locale/locale_cubit.dart';
-import 'package:iwms_citizen_app/logic/theme/theme_cubit.dart';
-import 'package:iwms_citizen_app/router/app_router.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_event.dart';
+import 'package:iwms_private_app/logic/locale/locale_cubit.dart';
+import 'package:iwms_private_app/logic/theme/theme_cubit.dart';
+import 'package:iwms_private_app/router/app_router.dart';
 
 class _LanguageOption {
   const _LanguageOption({

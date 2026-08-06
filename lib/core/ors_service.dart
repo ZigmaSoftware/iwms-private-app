@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_private_app/core/api_config.dart';
 
 /// OpenRouteService client for the driver map.
 ///

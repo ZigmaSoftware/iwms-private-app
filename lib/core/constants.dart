@@ -1,7 +1,7 @@
 // lib/core/constants.dart
 
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_private_app/core/theme/app_colors.dart';
 
 // --- COLOR AND STYLE CONSTANTS ---
 const Color kPrimaryColor = AppColors.primary; // Deep green primary

@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
 
 // ============================================================
 // EVENTS

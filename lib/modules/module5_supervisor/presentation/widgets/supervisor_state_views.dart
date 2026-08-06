@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
 /// Centered loading spinner in the accent green.
 class SupervisorLoadingView extends StatelessWidget {

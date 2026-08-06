@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
-import 'package:iwms_citizen_app/data/models/user_model.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_assignment_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_qr_scanner.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_animated_nav_bar.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/utils/household_mode_store.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_private_app/data/models/user_model.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/data/repositories/assignment_service.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_event.dart';
+import 'package:iwms_private_app/logic/auth/auth_state.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_assignment_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_qr_scanner.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/widgets/operator_animated_nav_bar.dart';
+import 'package:iwms_private_app/modules/module3_operator/utils/attendance_blink_store.dart';
+import 'package:iwms_private_app/modules/module3_operator/utils/household_mode_store.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
 
 /// DEPRECATED (July 2026): the standalone operator app surface is retired —
 /// one phone per vehicle, held by the driver. Use the merged Captain shell

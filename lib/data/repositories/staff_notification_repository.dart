@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/data/models/staff_notification_models.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/data/models/staff_notification_models.dart';
 
 class StaffNotificationException implements Exception {
   StaffNotificationException(this.message);

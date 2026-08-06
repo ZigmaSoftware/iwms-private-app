@@ -1,5 +1,5 @@
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
 
 class AuthTokenProvider {
   static Future<String?> getToken() async {

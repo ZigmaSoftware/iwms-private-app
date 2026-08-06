@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_crew_detail_sheet.dart';
-import 'package:iwms_citizen_app/shared/widgets/crew_avatar_stack.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_crew_detail_sheet.dart';
+import 'package:iwms_private_app/shared/widgets/crew_avatar_stack.dart';
 
 /// Card representing one daily trip assignment in the supervisor's zones.
 /// Ports OperatorTripSummaryCard's layout: a tinted status header bar, area
@@ -85,6 +85,8 @@ class SupervisorAssignmentCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             assignment.areaName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -101,6 +103,8 @@ class SupervisorAssignmentCard extends StatelessWidget {
                       assignment.zoneName.isNotEmpty
                           ? '${assignment.zoneName} · ${assignment.tripCode}'
                           : assignment.tripCode,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: SupervisorTheme.mutedText,
                         fontSize: 11.5,
@@ -216,11 +220,15 @@ class SupervisorAssignmentCard extends StatelessWidget {
         const Icon(Icons.local_shipping_outlined,
             size: 14, color: SupervisorTheme.mutedText),
         const SizedBox(width: 4),
-        Text(
-          assignment.vehicleNo,
-          style: const TextStyle(
-            fontSize: 12,
-            color: SupervisorTheme.mutedText,
+        Flexible(
+          child: Text(
+            assignment.vehicleNo,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              color: SupervisorTheme.mutedText,
+            ),
           ),
         ),
       ]);

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
+import 'package:iwms_private_app/data/models/vehicle_model.dart';
 
 class _VehicleMarker extends StatelessWidget {
   final VehicleModel vehicle;

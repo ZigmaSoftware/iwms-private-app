@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_private_app/modules/module3_operator/utils/attendance_blink_store.dart';
 
 /// PhonePe-style notched bottom navigation bar with 4 tabs (icon + label
 /// stacked vertically, always visible) and a floating green QR action

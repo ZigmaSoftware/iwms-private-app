@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:iwms_citizen_app/core/env.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_point_location_map_screen.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_cards.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_point_status_sheet.dart';
+import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_point_location_map_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_cards.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_point_status_sheet.dart';
 
 const int _kHouseholdPageSize = 20;
 

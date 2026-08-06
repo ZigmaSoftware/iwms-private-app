@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/env.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:table_calendar/table_calendar.dart';
 

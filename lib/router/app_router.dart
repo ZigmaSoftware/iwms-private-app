@@ -3,45 +3,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/models/permission_bundle.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:iwms_citizen_app/data/models/user_model.dart';
-import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_status_screen.dart';
-import 'package:iwms_citizen_app/presentation/staff_module_picker_screen.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/models/permission_bundle.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_state.dart';
+import 'package:iwms_private_app/data/models/user_model.dart';
+import 'package:iwms_private_app/logic/vehicle_tracking/vehicle_bloc.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/grievance_chat.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/grievance_status_screen.dart';
+import 'package:iwms_private_app/presentation/staff_module_picker_screen.dart';
 
 // Citizen Modules
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/home.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/calender.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/track_waste.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/driver_details.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/profile.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/splashscreen.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/login.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/home.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/calender.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/track_waste.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/driver_details.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/map.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/profile.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/personal_map.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
 
 // Operator Modules
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/main_operator_tabbar.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/main_operator_tabbar.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
 
 // Driver
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_trip_history_screen.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/screens/operator_trip_history_screen.dart';
 
 // Admin
-import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/main_supervisor_tabbar.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_grievance_screen.dart';
+import 'package:iwms_private_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/main_supervisor_tabbar.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_grievance_screen.dart';
 
 // Route Observer
 

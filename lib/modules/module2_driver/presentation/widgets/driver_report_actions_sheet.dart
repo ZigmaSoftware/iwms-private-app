@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/driver_vehicle_breakdown_flow.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/driver_vehicle_breakdown_flow.dart';
 
 /// The driver header's danger button opens this — a 2x2 grid of report
 /// actions. Only "Vehicle breakdown" is wired for now.

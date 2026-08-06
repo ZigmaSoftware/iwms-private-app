@@ -1,4 +1,4 @@
-import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_login.dart';
+import 'package:iwms_private_app/modules/module3_operator/offline/offline_login.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 

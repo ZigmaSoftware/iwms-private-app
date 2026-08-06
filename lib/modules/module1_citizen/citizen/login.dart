@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iwms_citizen_app/core/ui/app_assets.dart';
-import 'package:iwms_citizen_app/core/ui/app_copy.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/core/ui/app_assets.dart';
+import 'package:iwms_private_app/core/ui/app_copy.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
 
 import '../../../logic/auth/auth_bloc.dart';
 import '../../../logic/auth/auth_event.dart';

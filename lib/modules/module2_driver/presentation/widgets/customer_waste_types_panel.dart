@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/waste_type_visuals.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/waste_type_visuals.dart';
 
 /// The waste streams saved against a customer in Customer Creation, shown as
 /// colour-coded chips so the driver can eyeball the expected segregation before

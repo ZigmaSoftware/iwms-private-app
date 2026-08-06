@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
 /// One trip's servicing of a point/household: the stop plus which trip it
 /// belongs to.

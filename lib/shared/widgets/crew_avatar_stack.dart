@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 
 /// Small overlapping circular crew avatars (driver + operator + extras).
 /// Each shows the crew member's registered attendance face; falls back to the

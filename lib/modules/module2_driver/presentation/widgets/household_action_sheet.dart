@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/customer_waste_types_panel.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/customer_waste_types_panel.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/utils/assignment_status_store.dart';
 
 /// The customer action drawer — the same "Confirm customer" sheet the QR
 /// scanner opens, with **Collect / Collect later / Not available**. Reused by

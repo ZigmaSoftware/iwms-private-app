@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/models/user_model.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_multiselect_sheet.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/models/user_model.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_multiselect_sheet.dart';
 
 /// Teams "+Add" — creates a new `StaffTemplate` (driver + operator + extra
 /// operators) under the supervisor's own geo hierarchy, read from their login

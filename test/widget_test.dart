@@ -1,15 +1,15 @@
 // This is a basic Flutter widget test.
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/router/app_router.dart';
-import 'package:iwms_citizen_app/router/go_router_refresh_stream.dart';
-import 'package:iwms_citizen_app/main.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/router/app_router.dart';
+import 'package:iwms_private_app/router/go_router_refresh_stream.dart';
+import 'package:iwms_private_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:iwms_citizen_app/router/route_observer.dart';
+import 'package:iwms_private_app/router/route_observer.dart';
 
 // --- FIX: Import the SplashScreen ---
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/splashscreen.dart';
 // --- END FIX ---
 
 void main() {

@@ -1,8 +1,8 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 
 /// Centralised feedback surfaces for the Captain module.
 ///

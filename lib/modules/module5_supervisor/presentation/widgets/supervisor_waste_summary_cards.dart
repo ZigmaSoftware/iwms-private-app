@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
 enum _WasteRange { day, week, month, custom }
 

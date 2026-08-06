@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/state/trip_sequence.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/state/trip_sequence.dart';
 
 /// A trip with just the fields sequencing reads.
 OperatorTripToday _trip({

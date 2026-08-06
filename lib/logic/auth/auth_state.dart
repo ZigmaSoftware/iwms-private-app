@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:iwms_citizen_app/data/models/permission_bundle.dart';
+import 'package:iwms_private_app/data/models/permission_bundle.dart';
 
 abstract class AuthState extends Equatable {
   const AuthState();

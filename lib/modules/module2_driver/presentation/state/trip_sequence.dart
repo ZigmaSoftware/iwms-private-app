@@ -13,7 +13,7 @@
 /// bin trip at the same time are both live.
 library;
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 
 /// The trip that must be finished before a locked trip opens.
 class TripBlocker {

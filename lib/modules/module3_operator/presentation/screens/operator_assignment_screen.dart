@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
-import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_history_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cp_card.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_trip_summary_card.dart';
+import 'package:iwms_private_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_trip_history_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/widgets/operator_cp_card.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/widgets/operator_trip_summary_card.dart';
 
 /// Operator Assignments screen.
 ///

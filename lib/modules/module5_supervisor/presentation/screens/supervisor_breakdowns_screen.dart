@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/data/models/vehicle_breakdown_models.dart';
-import 'package:iwms_citizen_app/data/repositories/vehicle_breakdown_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
-import 'package:iwms_citizen_app/shared/widgets/keyboard_safe_bottom_sheet.dart';
+import 'package:iwms_private_app/data/models/vehicle_breakdown_models.dart';
+import 'package:iwms_private_app/data/repositories/vehicle_breakdown_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
+import 'package:iwms_private_app/shared/widgets/keyboard_safe_bottom_sheet.dart';
 
 /// Vehicle breakdown reports awaiting (or already given) this supervisor's
 /// approval — reachable from the Dashboard's "Breakdowns" quick-action tile

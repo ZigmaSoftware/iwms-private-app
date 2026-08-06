@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
-import 'package:iwms_citizen_app/core/constants.dart'; // Import your kPrimaryColor
-import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_private_app/core/constants.dart'; // Import your kPrimaryColor
+import 'package:iwms_private_app/core/ui/app_ui_tokens.dart';
 
 class AppTheme {
   static const PageTransitionsTheme _cupertinoPageTransitions =

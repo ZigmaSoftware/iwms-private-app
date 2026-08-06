@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
-import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
-import 'package:iwms_citizen_app/data/repositories/staff_management_repository.dart';
-import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_history_screen.dart';
+import 'package:iwms_private_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_private_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_private_app/data/repositories/staff_management_repository.dart';
+import 'package:iwms_private_app/modules/module4_admin/dashboard/presentation/screens/assignment_history_screen.dart';
 
 class AssignmentDetailsScreen extends StatefulWidget {
   const AssignmentDetailsScreen({

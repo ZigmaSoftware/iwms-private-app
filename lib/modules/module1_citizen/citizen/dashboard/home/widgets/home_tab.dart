@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/router/app_router.dart';
+import 'package:iwms_private_app/router/app_router.dart';
 
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/common/theme_tokens.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/common/widgets/section_card.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/quick_actions/models/quick_action.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/quick_actions/widgets/quick_action_grid.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/banner/controllers/banner_controller.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/banner/widgets/banner_pager.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/controllers/track_controller.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/models/waste_summary.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/widgets/radial_chart.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/notifications/widgets/notification_tile.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/common/theme_tokens.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/common/widgets/section_card.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/quick_actions/models/quick_action.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/quick_actions/widgets/quick_action_grid.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/banner/controllers/banner_controller.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/banner/widgets/banner_pager.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/controllers/track_controller.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/models/waste_summary.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/widgets/radial_chart.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/notifications/widgets/notification_tile.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
 
 class HomeTab extends StatelessWidget {
   const HomeTab({

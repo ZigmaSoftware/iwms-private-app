@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/data/models/grievance_ticket_model.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/data/models/grievance_ticket_model.dart';
 
 /// Supervisor-side grievance API. Hits the staff endpoint
 /// `/grievance/tickets/`, which the backend already scopes to the logged-in

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:timeline_tile/timeline_tile.dart';
 
-import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_private_app/data/models/staff_assignment_models.dart';
 
 class DetailedAssignmentHistoryScreen extends StatelessWidget {
   const DetailedAssignmentHistoryScreen({

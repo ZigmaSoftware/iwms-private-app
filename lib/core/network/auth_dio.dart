@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:iwms_citizen_app/core/network/auth_token_provider.dart';
+import 'package:iwms_private_app/core/network/auth_token_provider.dart';
 
 class AuthDio {
   static final Dio dio = Dio()

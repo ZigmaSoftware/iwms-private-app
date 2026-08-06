@@ -4,7 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
 import '../../../core/di.dart';
 import '../../../core/geofence_config.dart';
 import '../../../data/models/site_polygon.dart';
@@ -223,7 +223,7 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
           urlTemplate:
               'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
           subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.zigma.iwmsapp',
+          userAgentPackageName: 'com.zigma.iwmsprivateapp',
         ),
         PolygonLayer(polygons: polygons),
         if (markers.isNotEmpty) MarkerLayer(markers: markers),

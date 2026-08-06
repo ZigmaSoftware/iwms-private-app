@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import '../models/waste_period.dart';
 import '../models/waste_reports.dart';
 import '../models/waste_summary.dart';

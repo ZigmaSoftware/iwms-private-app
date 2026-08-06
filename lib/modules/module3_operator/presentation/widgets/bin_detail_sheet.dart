@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:geolocator/geolocator.dart';
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 
 /// Modal sheet for confirming a bin collection.
 ///

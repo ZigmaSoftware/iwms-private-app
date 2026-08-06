@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:iwms_citizen_app/data/models/customer_profile.dart';
-import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
-import 'package:iwms_citizen_app/data/repositories/citizen_collection_repository.dart';
-import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_history_screen.dart';
+import 'package:iwms_private_app/data/models/customer_profile.dart';
+import 'package:iwms_private_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_private_app/data/repositories/citizen_collection_repository.dart';
+import 'package:iwms_private_app/modules/module4_admin/dashboard/presentation/screens/assignment_history_screen.dart';
 
 class CitizenCollectionScreen extends StatefulWidget {
   const CitizenCollectionScreen({super.key});

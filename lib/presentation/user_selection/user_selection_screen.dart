@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
-import 'package:iwms_citizen_app/router/app_router.dart';
+import 'package:iwms_private_app/router/app_router.dart';
 import '../../modules/module1_citizen/citizen/auth_background.dart';
 
 class UserSelectionScreen extends StatefulWidget {

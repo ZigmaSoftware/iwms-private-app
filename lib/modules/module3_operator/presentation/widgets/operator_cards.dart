@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_private_app/core/theme/app_colors.dart';
 
 const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(24));
 const List<BoxShadow> _softShadow = [

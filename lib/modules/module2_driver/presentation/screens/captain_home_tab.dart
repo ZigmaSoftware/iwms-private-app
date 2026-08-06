@@ -4,18 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_trip_history_screen.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/state/trip_sequence.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/household_action_sheet.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/bin_detail_sheet.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/captain_glass.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/captain_nav_bar.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/collection_progress_meter.dart';
-import 'package:iwms_citizen_app/shared/widgets/crew_avatar_stack.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/screens/operator_trip_history_screen.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/state/trip_sequence.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/household_action_sheet.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/bin_detail_sheet.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/captain_glass.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/captain_nav_bar.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/collection_progress_meter.dart';
+import 'package:iwms_private_app/shared/widgets/crew_avatar_stack.dart';
 
 /// Captain Home — the "today-first" dashboard of the merged driver app.
 ///

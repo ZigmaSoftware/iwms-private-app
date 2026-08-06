@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/driver_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/driver_theme.dart';
 
 /// Driver bottom navigation bar. Shares the operator's exact visual treatment
 /// — a [BottomAppBar] with the animated indicator pill above each icon, the

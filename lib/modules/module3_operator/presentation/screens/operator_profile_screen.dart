@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cards.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/utils/household_mode_store.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
-import 'package:iwms_citizen_app/logic/locale/locale_cubit.dart';
+import 'package:iwms_private_app/core/theme/app_colors.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/widgets/operator_header.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/widgets/operator_cards.dart';
+import 'package:iwms_private_app/modules/module3_operator/utils/household_mode_store.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/logic/locale/locale_cubit.dart';
 
 const EdgeInsets _profilePagePadding =
     EdgeInsets.symmetric(horizontal: 20, vertical: 16);

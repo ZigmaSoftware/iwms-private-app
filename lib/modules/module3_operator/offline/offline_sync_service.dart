@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
 
 import 'pending_record.dart';
 import 'pending_record_dao.dart';

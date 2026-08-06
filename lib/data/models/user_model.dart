@@ -29,7 +29,7 @@
 //   List<Object?> get props => [userId, userName, role, authToken,emp_id];
 // }
 import 'package:equatable/equatable.dart';
-import 'package:iwms_citizen_app/data/models/permission_bundle.dart';
+import 'package:iwms_private_app/data/models/permission_bundle.dart';
 
 /// The requesting staff's own geo hierarchy (from the login response's
 /// `profile.data_scope`), e.g. "Anthiyur Panchayat". Backend viewsets already

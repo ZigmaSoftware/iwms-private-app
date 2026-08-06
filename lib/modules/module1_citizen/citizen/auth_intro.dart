@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:iwms_citizen_app/core/ui/app_copy.dart';
-import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
-import 'package:iwms_citizen_app/shared/widgets/app_primary_button.dart';
-import 'package:iwms_citizen_app/shared/widgets/brand_logo_badge.dart';
+import 'package:iwms_private_app/core/ui/app_copy.dart';
+import 'package:iwms_private_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_private_app/shared/widgets/app_primary_button.dart';
+import 'package:iwms_private_app/shared/widgets/brand_logo_badge.dart';
 
 import '../../../router/app_router.dart';
 import 'auth_background.dart';

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_cards.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_header.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_cards.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_header.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 
 class SupervisorProfileScreen extends StatefulWidget {
   const SupervisorProfileScreen({

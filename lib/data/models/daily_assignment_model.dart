@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_private_app/data/models/staff_assignment_models.dart';
 
 class DailyAssignmentModel {
   final int id;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/env.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
 /// Supervisor header.
 class SupervisorHeader extends StatefulWidget {

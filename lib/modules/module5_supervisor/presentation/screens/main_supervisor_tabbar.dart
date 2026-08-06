@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/attendance/supervisor_attendance_page.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_assignments_screen.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_attendance_screen.dart'
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_event.dart';
+import 'package:iwms_private_app/logic/auth/auth_state.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/attendance/supervisor_attendance_page.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_assignments_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_attendance_screen.dart'
     as attendance;
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_home_page.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_profile_screen.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_trips_screen.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_animated_nav_bar.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_home_page.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_profile_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_trips_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_animated_nav_bar.dart';
 
 /// Tabs surfaced in the supervisor shell.
 /// The 4 nav slots are: Dashboard / Trips / Attendance / Profile.

@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/data/models/customer_profile.dart';
-import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/data/models/customer_profile.dart';
+import 'package:iwms_private_app/data/models/staff_assignment_models.dart';
 
 class CitizenCollectionRepository {
   const CitizenCollectionRepository();

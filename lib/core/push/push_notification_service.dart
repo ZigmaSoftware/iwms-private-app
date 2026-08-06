@@ -2,11 +2,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/core/network/auth_dio.dart';
-import 'package:iwms_citizen_app/core/network/auth_token_provider.dart';
-import 'package:iwms_citizen_app/shared/services/notification_service.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/network/auth_dio.dart';
+import 'package:iwms_private_app/core/network/auth_token_provider.dart';
+import 'package:iwms_private_app/shared/services/notification_service.dart';
 
 /// Instant, backend-triggered push notifications for the citizen app — e.g.
 /// "your waste was just collected" the moment a driver marks it, even if the

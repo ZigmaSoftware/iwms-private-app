@@ -4,7 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_private_app/core/theme/app_colors.dart';
 
 /// Semantic flavour of a floating notification.
 enum AppFlashType { success, error, warning, info }

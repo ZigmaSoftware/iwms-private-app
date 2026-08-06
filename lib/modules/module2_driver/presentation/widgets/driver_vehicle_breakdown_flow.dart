@@ -5,13 +5,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/data/repositories/vehicle_breakdown_repository.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/services/image_compress_service.dart';
-import 'package:iwms_citizen_app/shared/widgets/keyboard_safe_bottom_sheet.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/data/repositories/vehicle_breakdown_repository.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module3_operator/services/image_compress_service.dart';
+import 'package:iwms_private_app/shared/widgets/keyboard_safe_bottom_sheet.dart';
 
 Color _assignmentTypeColor(String? type) {
   switch (type) {

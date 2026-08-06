@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/data/models/grievance_ticket_model.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/data/models/grievance_ticket_model.dart';
 
 /// Talks to the citizen-scoped grievance API (`/citizen/grievance-tickets/`).
 /// Every call is authenticated; the backend scopes results to the logged-in

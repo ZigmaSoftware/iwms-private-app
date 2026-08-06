@@ -3,10 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_trip_map_screen.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_assignment_detail_sheet.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_trip_map_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_assignment_detail_sheet.dart';
 
 class SupervisorAssignmentPickerDialog {
   static Future<void> show(
@@ -171,61 +171,26 @@ class _AssignmentPickerCard extends StatelessWidget {
     final dateText = assignment.tripDate == null
         ? 'No date'
         : DateFormat('EEE, d MMM').format(assignment.tripDate!);
+    // A Wrap (not a Row) so vehicle/time/waste-type gracefully flow onto a
+    // second line instead of overflowing the card's right edge when the
+    // combined text is too long for one row — this was overflowing by a few
+    // pixels on longer plan codes / vehicle numbers.
     final subtitleParts = <Widget>[
-      if (assignment.vehicleNo.isNotEmpty) ...[
-        const Icon(
-          Icons.local_shipping_rounded,
-          size: 15,
-          color: SupervisorTheme.info,
+      if (assignment.vehicleNo.isNotEmpty)
+        _MetaItem(
+          icon: Icons.local_shipping_rounded,
+          label: assignment.vehicleNo,
         ),
-        const SizedBox(width: 4),
-        Text(
-          assignment.vehicleNo,
-          style: const TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: SupervisorTheme.strongText,
-          ),
+      if (assignment.scheduledTime.isNotEmpty)
+        _MetaItem(
+          icon: Icons.schedule_rounded,
+          label: assignment.scheduledTime,
         ),
-      ],
-      if (assignment.scheduledTime.isNotEmpty) ...[
-        if (assignment.vehicleNo.isNotEmpty) const SizedBox(width: 12),
-        const Icon(
-          Icons.schedule_rounded,
-          size: 15,
-          color: SupervisorTheme.info,
+      if (assignment.wasteTypeName.isNotEmpty)
+        _MetaItem(
+          icon: Icons.recycling_rounded,
+          label: assignment.wasteTypeName,
         ),
-        const SizedBox(width: 4),
-        Text(
-          assignment.scheduledTime,
-          style: const TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: SupervisorTheme.strongText,
-          ),
-        ),
-      ],
-      if (assignment.wasteTypeName.isNotEmpty) ...[
-        if (assignment.vehicleNo.isNotEmpty || assignment.scheduledTime.isNotEmpty)
-          const SizedBox(width: 12),
-        const Icon(
-          Icons.recycling_rounded,
-          size: 15,
-          color: SupervisorTheme.info,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            assignment.wasteTypeName,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: SupervisorTheme.strongText,
-            ),
-          ),
-        ),
-      ],
     ];
 
     return Material(
@@ -304,6 +269,8 @@ class _AssignmentPickerCard extends StatelessWidget {
                         children: [
                           Text(
                             assignment.areaName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -314,6 +281,8 @@ class _AssignmentPickerCard extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             assignment.tripCode,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12.5,
                               color: SupervisorTheme.mutedText,
@@ -321,12 +290,19 @@ class _AssignmentPickerCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 10),
-                          Row(children: subtitleParts),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: subtitleParts,
+                          ),
                           const SizedBox(height: 10),
                           Text(
                             assignment.driverName.isNotEmpty
                                 ? assignment.driverName
                                 : assignment.operatorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
@@ -446,6 +422,42 @@ class _AssignmentPickerCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One icon+label pair in the card's meta row (vehicle / time / waste type).
+/// Sized to its content and capped with ellipsis so a long value truncates
+/// instead of pushing the row past the card's right edge.
+class _MetaItem extends StatelessWidget {
+  const _MetaItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 140),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: SupervisorTheme.info),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: SupervisorTheme.strongText,
+              ),
+            ),
           ),
         ],
       ),

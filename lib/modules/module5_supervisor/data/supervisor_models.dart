@@ -2,7 +2,7 @@
 // `/api/v1/user-creations/supervisor-zone-map/me/` and
 // `/api/v1/schedule-masters/daily-trip-assignments/`.
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart'
+import 'package:iwms_private_app/data/models/operator_trip_models.dart'
     show OperatorTripCrew;
 
 /// The zone scope a supervisor is authorised to operate in.

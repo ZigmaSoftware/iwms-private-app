@@ -2,12 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/core/env.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 
 /// Operator header — charcoal slate top section with the avatar/Register
 /// button anchored on the LEFT and identity (name, ID, designation, ward)

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_substitute_staff_sheet.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_substitute_staff_sheet.dart';
 
 /// Trip card "Actions" — substitute staff or vehicle on [assignmentId].
 /// Returns `true` if a substitution was applied, so the caller can refresh

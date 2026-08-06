@@ -1,13 +1,13 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module3_operator/utils/attendance_blink_store.dart';
 
 const double kCaptainNavBarHeight = 68;
-const double kCaptainNavBarHorizontalPadding = 16;
-const double kCaptainNavBarRadius = 28;
-const double kCaptainHomeBottomClearance = 102;
+const double kCaptainNavBarHorizontalPadding = 0;
+const double kCaptainNavBarRadius = 0;
+const double kCaptainHomeBottomClearance = 80;
 const double kCaptainMapBottomOverlayOffset = 74;
 const double kCaptainProfileBottomSpacer = 94;
 

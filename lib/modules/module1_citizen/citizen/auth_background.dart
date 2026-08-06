@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/ui/app_assets.dart';
+import 'package:iwms_private_app/core/ui/app_assets.dart';
 
 /// Shared background used by login-style screens.
 class AuthBackground extends StatelessWidget {

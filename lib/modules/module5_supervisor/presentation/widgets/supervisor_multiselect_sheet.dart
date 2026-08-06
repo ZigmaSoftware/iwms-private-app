@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
 /// A checkbox-list bottom sheet for picking zero or more [SupervisorCrewOption]s
 /// (e.g. "extra operators"). Returns the selected list, or null if dismissed

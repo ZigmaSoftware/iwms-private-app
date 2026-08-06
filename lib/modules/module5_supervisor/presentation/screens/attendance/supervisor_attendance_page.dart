@@ -6,15 +6,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/camerapage.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/attendance/supervisor_face_register.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_state.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/attendance/camerapage.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/attendance/supervisor_face_register.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 
 // Driver attendance palette, reused here so supervisor attendance matches the
 // same blue theme instead of the older purple supervisor palette.

@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/shared/services/notification_service.dart';
-import 'package:iwms_citizen_app/data/models/grievance_ticket_model.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_grievance_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/shared/services/notification_service.dart';
+import 'package:iwms_private_app/data/models/grievance_ticket_model.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_grievance_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
 /// Supervisor grievance queue with scoped filters, a compact ticket card,
 /// and a detail + timeline sheet.

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
-import 'package:iwms_citizen_app/router/app_router.dart';
-import 'package:iwms_citizen_app/data/models/grievance_ticket_model.dart';
-import 'package:iwms_citizen_app/data/repositories/citizen_grievance_repository.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
+import 'package:iwms_private_app/router/app_router.dart';
+import 'package:iwms_private_app/data/models/grievance_ticket_model.dart';
+import 'package:iwms_private_app/data/repositories/citizen_grievance_repository.dart';
 
 /// Conversational grievance assistant for citizens.
 /// Walks the citizen through category → sub-type → (location) → description,

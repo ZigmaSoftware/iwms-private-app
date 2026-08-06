@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
 
 import '../../../core/di.dart';
 import '../../../core/geofence_config.dart';
@@ -616,7 +616,7 @@ class _CitizenAllotedVehicleMapScreenState
         TileLayer(
           urlTemplate: themeConfig.urlTemplate,
           subdomains: themeConfig.subdomains,
-          userAgentPackageName: 'com.zigma.iwmsapp',
+          userAgentPackageName: 'com.zigma.iwmsprivateapp',
         ),
 
         // Gamma polygon

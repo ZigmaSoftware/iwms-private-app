@@ -5,11 +5,11 @@
 // active trip and submits the collection event.
 
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
+import 'package:iwms_private_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/widgets/operator_header.dart';
 
 class OperatorHomeScreen extends StatefulWidget {
   const OperatorHomeScreen({

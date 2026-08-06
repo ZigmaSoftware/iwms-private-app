@@ -7,23 +7,23 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
-import 'package:iwms_citizen_app/data/repositories/vehicle_repository.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/models/waste_reports.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/models/waste_summary.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/services/track_service.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
-import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
-import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/citizen_collection_screen.dart';
-import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/staff_management_screen.dart';
-import 'package:iwms_citizen_app/router/app_router.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
-import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
-import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/models/vehicle_model.dart';
+import 'package:iwms_private_app/data/repositories/vehicle_repository.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/models/waste_reports.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/models/waste_summary.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/services/track_service.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_event.dart';
+import 'package:iwms_private_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
+import 'package:iwms_private_app/modules/module4_admin/dashboard/presentation/screens/citizen_collection_screen.dart';
+import 'package:iwms_private_app/modules/module4_admin/dashboard/presentation/screens/staff_management_screen.dart';
+import 'package:iwms_private_app/router/app_router.dart';
+import 'package:iwms_private_app/data/repositories/assignment_service.dart';
+import 'package:iwms_private_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_private_app/data/models/staff_assignment_models.dart';
 
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
+import 'package:iwms_private_app/modules/module1_citizen/citizen/map.dart'
     as citizen_map;
 
 const _primaryGreen = Color(0xFF2E7D32);

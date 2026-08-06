@@ -3,15 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_private_app/core/api_config.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:iwms_citizen_app/core/env.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
 
 class ProfilePage extends StatefulWidget {
   final String empId;

@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:iwms_citizen_app/core/env.dart';
+import 'package:iwms_private_app/core/env.dart';
 
 // This function creates and configures a Dio instance
 Dio createDioClient() {
@@ -72,10 +72,13 @@ class ApiConfig {
   static const String citizenGrievanceMeta =
       '${desktopBase}citizen/complaint-tickets/meta/';
   // --- Grievance / complaint: supervisor / staff (team + department scoped) ---
-  // `complaint-ticket/tickets/` supports {id}/status/, {id}/escalate/, {id}/resolve/
-  // actions matching the supervisor repository's calls.
+  // `complaint-ticket/grievance-tickets/` supports {id}/status/,
+  // {id}/escalate/, {id}/resolve/ actions matching the supervisor
+  // repository's calls. NOTE: `complaint-ticket/tickets/` is a DIFFERENT,
+  // older flat-Complaint model used by the admin web frontend — do not
+  // point this constant back at it.
   static const String grievanceTickets =
-      '${desktopBase}complaint-ticket/tickets/';
+      '${desktopBase}complaint-ticket/grievance-tickets/';
 
   static const String assignments =
       '${desktopBase}schedule-operations/daily-trip-assignments/';

@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
 
 import '../models/daily_assignment_model.dart';
 import '../../core/api_config.dart';

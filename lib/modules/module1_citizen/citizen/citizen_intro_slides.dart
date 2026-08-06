@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import 'package:iwms_citizen_app/shared/widgets/brand_logo_badge.dart';
+import 'package:iwms_private_app/shared/widgets/brand_logo_badge.dart';
 
 import '../../../router/app_router.dart';
 

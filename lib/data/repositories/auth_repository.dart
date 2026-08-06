@@ -5,14 +5,14 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:iwms_citizen_app/core/push/push_notification_service.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_login.dart';
+import 'package:iwms_private_app/core/push/push_notification_service.dart';
+import 'package:iwms_private_app/modules/module3_operator/offline/offline_login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/env.dart';
-import 'package:iwms_citizen_app/data/models/permission_bundle.dart';
-import 'package:iwms_citizen_app/data/models/user_model.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/data/models/permission_bundle.dart';
+import 'package:iwms_private_app/data/models/user_model.dart';
 
 class AuthRepositoryException implements Exception {
   final String message;

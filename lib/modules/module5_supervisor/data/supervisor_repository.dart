@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/data/models/user_model.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/data/models/user_model.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 
 /// Raised when a supervisor data fetch fails. Carries an optional [code] so
 /// callers can branch (e.g. NO_ZONE_SCOPE → empty state instead of error).

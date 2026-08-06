@@ -4,20 +4,20 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/core/ui/app_flash.dart';
-import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/customer_waste_types_panel.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_private_app/data/repositories/assignment_service.dart';
+import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_state.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/customer_waste_types_panel.dart';
+import 'package:iwms_private_app/modules/module3_operator/services/locationservices.dart';
+import 'package:iwms_private_app/modules/module3_operator/utils/assignment_status_store.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
 
 class OperatorQRScanner extends StatefulWidget {
   const OperatorQRScanner({

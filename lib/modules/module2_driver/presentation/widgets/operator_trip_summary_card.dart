@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 
 class OperatorTripSummaryCard extends StatelessWidget {
   const OperatorTripSummaryCard({

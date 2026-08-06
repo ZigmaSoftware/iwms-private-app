@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/controllers/track_controller.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/widgets/track_tab.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/services/track_service.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/controllers/track_controller.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/widgets/track_tab.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track/services/track_service.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
 
 class TrackWasteScreen extends StatefulWidget {
   const TrackWasteScreen({super.key});

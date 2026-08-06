@@ -1,7 +1,7 @@
 // import 'dart:convert';
 
 // import 'package:crypto/crypto.dart';
-// import 'package:iwms_citizen_app/data/models/user_model.dart';
+// import 'package:iwms_private_app/data/models/user_model.dart';
 // import 'package:sqflite/sqflite.dart';
 // import 'package:path/path.dart';
 

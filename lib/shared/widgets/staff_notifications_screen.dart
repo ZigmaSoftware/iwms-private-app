@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/data/models/staff_notification_models.dart';
-import 'package:iwms_citizen_app/data/repositories/staff_notification_repository.dart';
+import 'package:iwms_private_app/data/models/staff_notification_models.dart';
+import 'package:iwms_private_app/data/repositories/staff_notification_repository.dart';
 
 /// In-app notification inbox shared by the driver and supervisor apps —
 /// vehicle replacement approval/rejection, team reassignment, substitution.

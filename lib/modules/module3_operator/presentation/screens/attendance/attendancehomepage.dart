@@ -3,16 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_state.dart';
 import 'package:motion_tab_bar/MotionTabBar.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
 
 
 import 'attendancehistory.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
+import 'package:iwms_private_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
 
 // class HomePage1 extends StatefulWidget {
 //   final String empid;

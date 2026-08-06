@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/citizen_alert.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
 
 class NotificationTile extends StatelessWidget {
   const NotificationTile({

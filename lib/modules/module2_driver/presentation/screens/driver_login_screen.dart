@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:iwms_citizen_app/core/constants.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
-import 'package:iwms_citizen_app/core/ui/app_copy.dart';
-import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
-import 'package:iwms_citizen_app/shared/widgets/app_primary_button.dart';
+import 'package:iwms_private_app/core/constants.dart';
+import 'package:iwms_private_app/core/theme/app_colors.dart';
+import 'package:iwms_private_app/core/ui/app_copy.dart';
+import 'package:iwms_private_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_private_app/shared/widgets/app_primary_button.dart';
 
 import '../../../../router/app_router.dart';
 

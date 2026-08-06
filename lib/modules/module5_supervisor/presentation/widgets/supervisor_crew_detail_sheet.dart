@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/shared/widgets/crew_avatar_stack.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/shared/widgets/crew_avatar_stack.dart';
 
 /// Tapping the enlarged crew avatar stack on a trip card opens this — the
 /// crew's photos in a row, each with their emp id + mobile number.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 
 /// Colour + icon for a waste stream, so the same stream reads identically
 /// wherever the driver meets it — the household action sheet, the weight-capture

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
-import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_multiselect_sheet.dart';
-import 'package:iwms_citizen_app/shared/widgets/keyboard_safe_bottom_sheet.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_multiselect_sheet.dart';
+import 'package:iwms_private_app/shared/widgets/keyboard_safe_bottom_sheet.dart';
 
 /// "Form ALT" — creates a new `AlternativeStaffTemplate` (staff substitution)
 /// under the supervisor's own hierarchy. Pops `true` on success so the caller

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/core/ui/app_assets.dart';
-import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_private_app/core/ui/app_assets.dart';
+import 'package:iwms_private_app/core/ui/app_ui_tokens.dart';
 
 class BrandLogoBadge extends StatelessWidget {
   const BrandLogoBadge({

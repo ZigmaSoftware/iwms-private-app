@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
-import 'package:iwms_citizen_app/data/repositories/staff_management_repository.dart';
+import 'package:iwms_private_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_private_app/data/repositories/staff_management_repository.dart';
 import 'assignment_history_screen.dart';
 
 class StaffManagementScreen extends StatefulWidget {

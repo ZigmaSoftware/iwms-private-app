@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
-import 'package:iwms_citizen_app/data/models/grievance_ticket_model.dart';
-import 'package:iwms_citizen_app/data/repositories/citizen_grievance_repository.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/notifications/models/citizen_alert.dart';
+import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
+import 'package:iwms_private_app/data/models/grievance_ticket_model.dart';
+import 'package:iwms_private_app/data/repositories/citizen_grievance_repository.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/notifications/models/citizen_alert.dart';
 
 /// Lists the grievances the citizen has raised and shows the live status +
 /// progress timeline for each.

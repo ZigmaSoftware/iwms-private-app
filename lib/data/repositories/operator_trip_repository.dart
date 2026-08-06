@@ -2,9 +2,9 @@ import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
 
-import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
+import 'package:iwms_private_app/core/api_config.dart';
+import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 
 /// Thrown by the operator-trip repository for actionable, user-facing errors.
 ///
