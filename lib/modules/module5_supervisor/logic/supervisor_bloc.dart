@@ -1,5 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:iwms_private_app/data/models/trip_retrip_models.dart';
+import 'package:iwms_private_app/data/repositories/trip_retrip_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
 
@@ -33,6 +35,7 @@ class SupervisorState {
   final List<SupervisorAssignment> assignments;
   final SupervisorKpis kpis;
   final List<SupervisorAlert> alerts;
+  final List<TripRetripRequest> retripRequests;
   final String? errorMessage;
 
   const SupervisorState({
@@ -41,6 +44,7 @@ class SupervisorState {
     this.assignments = const [],
     this.kpis = SupervisorKpis.empty,
     this.alerts = const [],
+    this.retripRequests = const [],
     this.errorMessage,
   });
 
@@ -50,6 +54,7 @@ class SupervisorState {
     List<SupervisorAssignment>? assignments,
     SupervisorKpis? kpis,
     List<SupervisorAlert>? alerts,
+    List<TripRetripRequest>? retripRequests,
     String? errorMessage,
   }) {
     return SupervisorState(
@@ -58,6 +63,7 @@ class SupervisorState {
       assignments: assignments ?? this.assignments,
       kpis: kpis ?? this.kpis,
       alerts: alerts ?? this.alerts,
+      retripRequests: retripRequests ?? this.retripRequests,
       errorMessage: errorMessage,
     );
   }
@@ -68,6 +74,8 @@ class SupervisorState {
       assignments.where((a) => a.isCompleted).toList();
   List<SupervisorAssignment> get pendingReview =>
       assignments.where((a) => a.isPendingApproval).toList();
+  List<TripRetripRequest> get pendingRetripRequests =>
+      retripRequests.where((r) => r.isPending).toList();
 
   /// Human-readable scope for the header. The government backend is
   /// hierarchy-based (no zone map), so a supervisor's scope is best described by
@@ -100,9 +108,13 @@ class SupervisorState {
 
 class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState> {
   final SupervisorRepository _repo;
+  final TripRetripRepository _retripRepo;
 
-  SupervisorBloc({required SupervisorRepository repository})
-      : _repo = repository,
+  SupervisorBloc({
+    required SupervisorRepository repository,
+    TripRetripRepository? retripRepository,
+  })  : _repo = repository,
+        _retripRepo = retripRepository ?? TripRetripRepository(),
         super(const SupervisorState()) {
     on<SupervisorLoadRequested>(_onLoad);
     on<SupervisorRefreshRequested>(_onRefresh);
@@ -167,6 +179,15 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState> {
     final kpis = SupervisorKpis.fromAssignments(assignments);
     final alerts = SupervisorAlert.fromAssignments(assignments);
 
+    // Best-effort: a Re-Trip fetch failure must not blank the trips list, so
+    // keep whatever was already loaded rather than failing the whole state.
+    List<TripRetripRequest> retrips;
+    try {
+      retrips = await _retripRepo.fetchRequests();
+    } catch (_) {
+      retrips = state.retripRequests;
+    }
+
     emit(state.copyWith(
       status:
           assignments.isEmpty ? SupervisorStatus.empty : SupervisorStatus.ready,
@@ -174,6 +195,7 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState> {
       assignments: assignments,
       kpis: kpis,
       alerts: alerts,
+      retripRequests: retrips,
     ));
   }
 }

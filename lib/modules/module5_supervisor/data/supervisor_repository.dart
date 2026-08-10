@@ -29,6 +29,8 @@ class SupervisorRepository {
       '${ApiConfig.desktopBase}schedule-setup/staff-templates/';
   static const String _tripLogs =
       '${ApiConfig.desktopBase}schedule-operations/daily-trip-logs/';
+  static const String _binCollectionEvents =
+      '${ApiConfig.desktopBase}schedule-operations/bin-collection-events/';
   static const String _attendanceRecords =
       '${ApiConfig.attendanceBase}records/';
   static const String _collectionPoints =
@@ -124,18 +126,47 @@ class SupervisorRepository {
     }
   }
 
-  /// The supervisor's collected-waste time series (one entry per trip log),
-  /// sourced from the daily trip log's bin + household weights. Bucketing by
-  /// day/week/month is done in the chart widget.
+  /// The supervisor's collected-waste time series (one entry per bin
+  /// collection event), sourced from the actual per-bin waste type — wet vs
+  /// dry — rather than the bin/household stop-kind split the daily trip log
+  /// carries. Bucketing by day/week/month is done in the chart widget.
   Future<List<SupervisorWastePoint>> fetchWasteSeries() async {
+    try {
+      final events = await fetchWasteEvents();
+      return events
+          .map((e) => SupervisorWastePoint(
+                date: e.date,
+                wetKg: e.isWet ? e.weightKg : 0,
+                dryKg: e.isDry ? e.weightKg : 0,
+                otherKg: (e.isWet || e.isDry) ? 0 : e.weightKg,
+              ))
+          .where((p) => p.hasValidDate)
+          .toList();
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    } catch (e) {
+      throw SupervisorException(e.toString());
+    }
+  }
+
+  /// The full per-event detail behind [fetchWasteSeries] — vehicle,
+  /// collection point, and status per collected bin — for the waste-summary
+  /// cards' tap-through "which vehicle collected this" view. Same endpoint,
+  /// same scope; kept as a separate method so a caller that only needs the
+  /// chart totals isn't forced to carry the extra per-event fields around.
+  Future<List<SupervisorWasteEvent>> fetchWasteEvents() async {
     try {
       final dio = await authorizedDio();
       final res = await dio.get(
-        _tripLogs,
-        queryParameters: {'mine': 'true', 'limit': '1000'},
+        _binCollectionEvents,
+        queryParameters: {
+          'mine': 'true',
+          'status': 'Collected',
+          'limit': '5000',
+        },
       );
       return _rawList(res.data)
-          .map((e) => SupervisorWastePoint.fromLogJson(e))
+          .map((e) => SupervisorWasteEvent.fromJson(e))
           .where((p) => p.hasValidDate)
           .toList();
     } on DioException catch (e) {
@@ -281,12 +312,14 @@ class SupervisorRepository {
   Future<List<SupervisorCrewOption>> fetchAvailableDrivers({
     String? excludeTemplateId,
   }) =>
-      _fetchAvailableStaffByRole('driver', excludeTemplateId: excludeTemplateId);
+      _fetchAvailableStaffByRole('driver',
+          excludeTemplateId: excludeTemplateId);
 
   Future<List<SupervisorCrewOption>> fetchAvailableOperators({
     String? excludeTemplateId,
   }) =>
-      _fetchAvailableStaffByRole('operator', excludeTemplateId: excludeTemplateId);
+      _fetchAvailableStaffByRole('operator',
+          excludeTemplateId: excludeTemplateId);
 
   Future<List<SupervisorCrewOption>> _fetchAvailableStaffByRole(
     String role, {
@@ -345,7 +378,8 @@ class SupervisorRepository {
 
   /// Alternative staff templates already created under this supervisor's
   /// hierarchy (backend scopes the list automatically).
-  Future<List<SupervisorAltStaffTemplate>> fetchAlternativeStaffTemplates() async {
+  Future<List<SupervisorAltStaffTemplate>>
+      fetchAlternativeStaffTemplates() async {
     try {
       final dio = await authorizedDio();
       final res = await dio.get(_alternativeStaffTemplates);
@@ -472,8 +506,7 @@ class SupervisorRepository {
         if (geo?.districtId != null) 'district_id': geo!.districtId,
         if (geo?.areaTypeId != null) 'area_type_id': geo!.areaTypeId,
         if (geo?.corporationId != null) 'corporation_id': geo!.corporationId,
-        if (geo?.municipalityId != null)
-          'municipality_id': geo!.municipalityId,
+        if (geo?.municipalityId != null) 'municipality_id': geo!.municipalityId,
         if (geo?.townPanchayatId != null)
           'town_panchayat_id': geo!.townPanchayatId,
         if (geo?.panchayatUnionId != null)

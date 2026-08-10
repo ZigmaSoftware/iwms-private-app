@@ -5,6 +5,7 @@ import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_waste_vehicle_sheet.dart';
 
 enum _WasteRange { day, week, month, custom }
 
@@ -22,7 +23,7 @@ class _SupervisorWasteSummaryCardsState
 
   bool _loading = true;
   String? _error;
-  List<SupervisorWastePoint> _raw = const [];
+  List<SupervisorWasteEvent> _events = const [];
 
   _WasteRange _range = _WasteRange.day;
   DateTime _anchorDate = DateTime.now();
@@ -43,12 +44,12 @@ class _SupervisorWasteSummaryCardsState
     });
 
     try {
-      final data = await _repo.fetchWasteSeries();
+      final data = await _repo.fetchWasteEvents();
 
       if (!mounted) return;
 
       setState(() {
-        _raw = data;
+        _events = data;
         _loading = false;
       });
     } catch (_) {
@@ -135,11 +136,11 @@ class _SupervisorWasteSummaryCardsState
     }
   }
 
-  List<SupervisorWastePoint> _pointsInWindow() {
+  List<SupervisorWasteEvent> _eventsInWindow() {
     final (start, end) = _window();
 
-    return _raw.where((point) {
-      return !point.date.isBefore(start) && point.date.isBefore(end);
+    return _events.where((event) {
+      return !event.date.isBefore(start) && event.date.isBefore(end);
     }).toList();
   }
 
@@ -200,27 +201,19 @@ class _SupervisorWasteSummaryCardsState
 
   @override
   Widget build(BuildContext context) {
-    final points = _pointsInWindow();
+    final events = _eventsInWindow();
 
-    final totalKg = points.fold<double>(
-      0,
-      (sum, point) => sum + point.totalKg,
-    );
+    final totalKg = events.fold<double>(0, (sum, e) => sum + e.weightKg);
+    final wetKg = events
+        .where((e) => e.isWet)
+        .fold<double>(0, (sum, e) => sum + e.weightKg);
+    final dryKg = events
+        .where((e) => e.isDry)
+        .fold<double>(0, (sum, e) => sum + e.weightKg);
 
-    final binKg = points.fold<double>(
-      0,
-      (sum, point) => sum + point.binKg,
-    );
+    final wetPct = totalKg > 0 ? wetKg / totalKg : 0.0;
 
-    final householdKg = points.fold<double>(
-      0,
-      (sum, point) => sum + point.householdKg,
-    );
-
-    final binPct = totalKg > 0 ? binKg / totalKg : 0.0;
-
-    final householdPct =
-        totalKg > 0 ? householdKg / totalKg : 0.0;
+    final dryPct = totalKg > 0 ? dryKg / totalKg : 0.0;
 
     final targetPct =
         (totalKg / _placeholderTargetKg).clamp(0.0, 1.0).toDouble();
@@ -252,23 +245,37 @@ class _SupervisorWasteSummaryCardsState
             children: [
               Expanded(
                 child: _breakdownCard(
-                  title: 'Bin Collection',
-                  valueKg: binKg,
-                  pct: binPct,
+                  title: 'Wet Waste',
+                  valueKg: wetKg,
+                  pct: wetPct,
                   iconAsset: 'assets/icons/bin.png',
                   backgroundAsset: 'assets/cards/bin_card.png',
                   valueColor: const Color(0xFF7C3AED),
+                  onTap: () => showSupervisorWasteVehicleSheet(
+                    context,
+                    title: 'Wet Waste collections',
+                    accentColor: const Color(0xFF7C3AED),
+                    events: events,
+                    matches: (e) => e.isWet,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _breakdownCard(
-                  title: 'Households',
-                  valueKg: householdKg,
-                  pct: householdPct,
+                  title: 'Dry Waste',
+                  valueKg: dryKg,
+                  pct: dryPct,
                   iconAsset: 'assets/icons/household.png',
                   backgroundAsset: 'assets/cards/household_card.png',
                   valueColor: const Color(0xFFF97316),
+                  onTap: () => showSupervisorWasteVehicleSheet(
+                    context,
+                    title: 'Dry Waste collections',
+                    accentColor: const Color(0xFFF97316),
+                    events: events,
+                    matches: (e) => e.isDry,
+                  ),
                 ),
               ),
             ],
@@ -443,9 +450,7 @@ class _SupervisorWasteSummaryCardsState
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
-              color: selected
-                  ? Colors.white
-                  : SupervisorTheme.strongText,
+              color: selected ? Colors.white : SupervisorTheme.strongText,
             ),
           ),
         ),
@@ -505,7 +510,6 @@ class _SupervisorWasteSummaryCardsState
                   ),
                 ),
               ),
-
               Positioned(
                 left: 15,
                 top: 14,
@@ -530,7 +534,6 @@ class _SupervisorWasteSummaryCardsState
                   ],
                 ),
               ),
-
               Positioned(
                 left: 15,
                 top: 58,
@@ -545,7 +548,6 @@ class _SupervisorWasteSummaryCardsState
                   ),
                 ),
               ),
-
               Positioned(
                 right: 10,
                 top: 21,
@@ -608,8 +610,7 @@ class _SupervisorWasteSummaryCardsState
               value: targetPct,
               strokeWidth: 6,
               strokeCap: StrokeCap.round,
-              backgroundColor:
-                  SupervisorTheme.info.withValues(alpha: 0.14),
+              backgroundColor: SupervisorTheme.info.withValues(alpha: 0.14),
               valueColor: const AlwaysStoppedAnimation<Color>(
                 SupervisorTheme.info,
               ),
@@ -651,106 +652,115 @@ class _SupervisorWasteSummaryCardsState
     required String iconAsset,
     required String backgroundAsset,
     required Color valueColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      height: 122,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: valueColor.withValues(alpha: 0.10),
-        ),
-        boxShadow: SupervisorTheme.softShadow,
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            backgroundAsset,
-            fit: BoxFit.cover,
-            alignment: Alignment.bottomRight,
-            filterQuality: FilterQuality.high,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 122,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: valueColor.withValues(alpha: 0.10),
+            ),
+            boxShadow: SupervisorTheme.softShadow,
           ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                stops: const [
-                  0.0,
-                  0.48,
-                  0.76,
-                  1.0,
-                ],
-                colors: [
-                  Colors.white.withValues(alpha: 0.28),
-                  Colors.white.withValues(alpha: 0.10),
-                  Colors.transparent,
-                  Colors.transparent,
-                ],
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(
+                backgroundAsset,
+                fit: BoxFit.cover,
+                alignment: Alignment.bottomRight,
+                filterQuality: FilterQuality.high,
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              11,
-              10,
-              8,
-              9,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    stops: const [
+                      0.0,
+                      0.48,
+                      0.76,
+                      1.0,
+                    ],
+                    colors: [
+                      Colors.white.withValues(alpha: 0.28),
+                      Colors.white.withValues(alpha: 0.10),
+                      Colors.transparent,
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  11,
+                  10,
+                  8,
+                  9,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Image.asset(
-                      iconAsset,
-                      width: 30,
-                      height: 30,
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1,
-                          fontWeight: FontWeight.w800,
-                          color: valueColor,
+                    Row(
+                      children: [
+                        Image.asset(
+                          iconAsset,
+                          width: 30,
+                          height: 30,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
                         ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              color: valueColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _fmt(valueKg),
+                      style: const TextStyle(
+                        fontSize: 25,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.4,
+                        color: SupervisorTheme.strongText,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${(pct * 100).round()}% of total',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        height: 1,
+                        fontWeight: FontWeight.w600,
+                        color: SupervisorTheme.mutedText,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  _fmt(valueKg),
-                  style: const TextStyle(
-                    fontSize: 25,
-                    height: 1,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.4,
-                    color: SupervisorTheme.strongText,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${(pct * 100).round()}% of total',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    height: 1,
-                    fontWeight: FontWeight.w600,
-                    color: SupervisorTheme.mutedText,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

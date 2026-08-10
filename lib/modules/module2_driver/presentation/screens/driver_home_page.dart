@@ -31,7 +31,6 @@ import 'package:iwms_private_app/core/ors_service.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/screens/captain_home_tab.dart';
-import 'package:iwms_private_app/modules/module2_driver/presentation/state/collection_mode_store.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/state/trip_sequence.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/driver_theme.dart';
@@ -180,8 +179,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
     super.initState();
     // Hydrate the persisted light/dark choice before first paint settles.
     CaptainThemeStore.load();
-    // Hydrate the persisted Household/Bin collection mode.
-    CollectionModeStore.load();
     _tripRepository = getIt<OperatorTripRepository>();
     unawaited(PushNotificationService.instance.initAndRegister(
       registerUrl: ApiConfig.registerStaffFcmToken,
@@ -232,33 +229,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     _mapController.move(target, 15.0);
   }
 
-  bool _tripMatchesMode(OperatorTripToday trip, CollectionMode mode) {
-    return mode == CollectionMode.household
-        ? trip.isHousehold
-        : !trip.isHousehold;
-  }
-
-  List<OperatorTripToday> _tripsForMode(
-    CollectionMode mode, [
-    List<OperatorTripToday>? source,
-  ]) {
-    final trips = source ?? _todayTrips;
-    return trips.where((trip) => _tripMatchesMode(trip, mode)).toList();
-  }
-
-  List<OperatorTripToday> get _visibleTodayTrips =>
-      _tripsForMode(CollectionModeStore.mode.value);
-
-  OperatorTripToday? _tripById(
-    Iterable<OperatorTripToday> trips,
-    String? assignmentUniqueId,
-  ) {
-    if (assignmentUniqueId == null || assignmentUniqueId.isEmpty) return null;
-    for (final trip in trips) {
-      if (trip.assignmentUniqueId == assignmentUniqueId) return trip;
-    }
-    return null;
-  }
+  List<OperatorTripToday> get _visibleTodayTrips => _todayTrips;
 
   LatLng _anchorForVisibleTripStops(
     List<_DriverAssignmentStop> stops,
@@ -280,50 +251,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
     final trip = _todayTrip;
     if (trip == null) return null;
     return tripBlockers(_visibleTodayTrips)[trip.assignmentUniqueId];
-  }
-
-  void _applyCollectionModeState(
-    CollectionMode mode, {
-    List<OperatorTripToday>? sourceTrips,
-    String? preferredTripId,
-  }) {
-    final allTrips = sourceTrips ?? _todayTrips;
-    final visibleTrips = _tripsForMode(mode, allTrips);
-    final selectedTrip = _tripById(visibleTrips, preferredTripId) ??
-        _tripById(visibleTrips, _mapTrip?.assignmentUniqueId) ??
-        _tripById(visibleTrips, _todayTrip?.assignmentUniqueId) ??
-        // Land on the trip the driver can actually work — with a 06:30 and a
-        // 15:00 bin run, opening on the locked afternoon card would be a dead
-        // end.
-        firstWorkableTrip(visibleTrips);
-    final detail = selectedTrip?.toHistoryDetail();
-    final (stops, tripStops) = _buildMapStopsForTrip(selectedTrip);
-
-    setState(() {
-      _todayTrip = selectedTrip;
-      _mapTrip = selectedTrip;
-      _customers = stops;
-      _tripStops = tripStops;
-      _tripPolyline = const [];
-      _activeTripId = selectedTrip?.assignmentUniqueId;
-      _activeRoutePlanId = detail?.summary.tripPlan?.uniqueId;
-      _activeVehicleType = null;
-      _activeTripDetail = detail;
-      _staticDriverLocation = _anchorForVisibleTripStops(stops, tripStops);
-      _currentAssignments = [
-        if (selectedTrip != null) selectedTrip.toHistorySummary(),
-      ];
-    });
-  }
-
-  Future<void> _onCollectionModeChanged(CollectionMode mode) async {
-    if (CollectionModeStore.mode.value == mode) return;
-    await CollectionModeStore.set(mode);
-    if (!mounted) return;
-    _applyCollectionModeState(
-      mode,
-      preferredTripId: _todayTrip?.assignmentUniqueId,
-    );
   }
 
   @override
@@ -368,21 +295,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
             // flips so every mode-aware token re-resolves.
             return ValueListenableBuilder<bool>(
               valueListenable: CaptainThemeStore.isDark,
-              builder: (context, _, __) =>
-                  ValueListenableBuilder<CollectionMode>(
-                // Rebuild when the Household/Bin toggle flips, so the
-                // carousel, home list, map and scan button all switch to
-                // showing only the selected mode's trips.
-                valueListenable: CollectionModeStore.mode,
-                builder: (context, collectionMode, __) => _buildShell(
-                  context,
-                  driverLocation,
-                  nameFromState,
-                  empIdFromState,
-                  employeeIdFromState,
-                  selectedVehicle,
-                  collectionMode,
-                ),
+              builder: (context, _, __) => _buildShell(
+                context,
+                driverLocation,
+                nameFromState,
+                empIdFromState,
+                employeeIdFromState,
+                selectedVehicle,
               ),
             );
           },
@@ -398,10 +317,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     String? empIdFromState,
     String? employeeIdFromState,
     VehicleModel? selectedVehicle,
-    CollectionMode collectionMode,
   ) {
-    final showCollectionToggle =
-        _activeTab == _DriverTab.home || _activeTab == _DriverTab.map;
     final pullInHeader =
         _activeTab == _DriverTab.attendance || _activeTab == _DriverTab.profile;
 
@@ -424,9 +340,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
               onNotificationsTap: _openNotifications,
               unreadNotificationCount: _unreadNotificationCount,
               collapsed: pullInHeader,
-              showCollectionModeToggle: showCollectionToggle,
-              collectionMode: collectionMode,
-              onCollectionModeChanged: _onCollectionModeChanged,
             ),
             Expanded(
               child: PageTransitionSwitcher(
@@ -607,7 +520,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _assignmentError = null;
         _tripError = null;
       });
-      _applyCollectionModeState(CollectionModeStore.mode.value);
     } catch (e) {
       setState(() {
         _loadingCustomers = false;
@@ -959,8 +871,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
   ///   • Bin QR — validate a bin against today's trip, then weight entry.
   ///   • Household — scan a customer QR, then wet/dry/mixed weighment.
   ///
-  /// The global Household/Bin toggle owns this choice now, so the FAB opens
-  /// only the currently-selected flow instead of asking again.
+  /// The currently selected trip's own kind decides which flow opens — no
+  /// separate mode switch. Most drivers only ever have bin trips; a driver
+  /// who does have a household trip selected gets the household flow.
   Future<void> _openScanner() async {
     // The floating scan button is reachable from anywhere, including while a
     // locked trip is the selected card. Scanning it would come back from the
@@ -971,21 +884,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
       return;
     }
 
-    if (CollectionModeStore.mode.value == CollectionMode.bin) {
+    final selected = _todayTrip;
+    if (selected == null || !selected.isHousehold) {
       final result = await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const OperatorTripScanScreen()),
       );
       if (!mounted) return;
       if (result != null) await _loadAssignmentsForDriver();
     } else {
-      final householdAssignmentId =
-          (_todayTrip != null && _todayTrip!.isHousehold)
-              ? _todayTrip!.assignmentUniqueId
-              : null;
+      final householdAssignmentId = selected.assignmentUniqueId;
       final householdStatuses = <String, String>{
-        if (_todayTrip != null && _todayTrip!.isHousehold)
-          for (final stop in _todayTrip!.householdCollections)
-            stop.customerUniqueId: stop.isCollected ? 'collected' : stop.status,
+        for (final stop in selected.householdCollections)
+          stop.customerUniqueId: stop.isCollected ? 'collected' : stop.status,
       };
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -3623,6 +3533,8 @@ class _ProfileTabState extends State<_ProfileTab> {
 
   bool _loading = true;
   String? _imageName;
+  String? _companyName;
+  String? _projectName;
   String? _department;
   String? _designation;
   DateTime? _doj;
@@ -3683,6 +3595,8 @@ class _ProfileTabState extends State<_ProfileTab> {
           final registered = data?['attendance_reg_image']?.toString() ?? '';
           final staffPhoto = data?['photo']?.toString() ?? '';
           _imageName = registered.isNotEmpty ? registered : staffPhoto;
+          _companyName = data?['company_name']?.toString();
+          _projectName = data?['project_name']?.toString();
           _department = data?['department']?.toString();
           _designation = data?['designation']?.toString();
           _doj = _tryParseDate(data?['doj']);
@@ -3795,8 +3709,11 @@ class _ProfileTabState extends State<_ProfileTab> {
     final empId = widget.empId;
     final hasPhoto = !_isEmpty(_imageName);
 
-    final hasEmployment =
-        !_isEmpty(_department) || !_isEmpty(_designation) || _doj != null;
+    final hasEmployment = !_isEmpty(_companyName) ||
+        !_isEmpty(_projectName) ||
+        !_isEmpty(_department) ||
+        !_isEmpty(_designation) ||
+        _doj != null;
     final hasPersonal =
         !_isEmpty(_dob) || !_isEmpty(_bloodGroup) || !_isEmpty(_gender);
     final hasContact = !_isEmpty(_contactMobile) || !_isEmpty(_contactEmail);
@@ -3892,6 +3809,8 @@ class _ProfileTabState extends State<_ProfileTab> {
                 icon: Icons.badge_outlined,
                 title: 'EMPLOYMENT',
                 rows: [
+                  if (!_isEmpty(_companyName)) ('Company', _companyName!),
+                  if (!_isEmpty(_projectName)) ('Project', _projectName!),
                   if (!_isEmpty(_department)) ('Department', _department!),
                   if (!_isEmpty(_designation)) ('Designation', _designation!),
                   if (_doj != null)

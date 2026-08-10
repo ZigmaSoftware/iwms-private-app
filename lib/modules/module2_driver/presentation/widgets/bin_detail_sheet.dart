@@ -157,6 +157,8 @@ class _BinDetailSheetState extends State<BinDetailSheet> {
         return 'Bin not found.';
       case 'NO_ACTIVE_TRIP':
         return 'You have no active trip today.';
+      case 'TRIP_NOT_STARTED':
+        return 'Start the trip before collecting. Press "Start Trip" first.';
       case 'WEIGHT_EXCEEDS_CAPACITY':
         return e.message;
       default:

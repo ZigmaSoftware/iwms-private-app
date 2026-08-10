@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 /// Environment-style flags for build-time configuration.
 /// Set via `--dart-define` when running or building:
-///   flutter run --dart-define=VITE_PROD=true --dart-define=VITE_ENFORCE_PERMISSIONS=false --dart-define=VITE_PRIVATE_API_LOCAL=http://192.168.3.120:8000/api/v1
+///   flutter run --dart-define=VITE_PROD=true --dart-define=VITE_ENFORCE_PERMISSIONS=false --dart-define=VITE_PRIVATE_API_LOCAL=http://115.245.93.26:4216/api/v1
 const bool kProd = bool.fromEnvironment(
   'VITE_PROD',
   defaultValue: kReleaseMode,
@@ -10,8 +10,8 @@ const bool kProd = bool.fromEnvironment(
 const bool kEnforcePermissions =
     bool.fromEnvironment('VITE_ENFORCE_PERMISSIONS', defaultValue: true);
 
-const String _defaultPrivateApiBase = 'http://192.168.3.120:8000/api/v1';
-const String _defaultPrivateBackendOrigin = 'http://192.168.3.120:8000';
+const String _defaultPrivateApiBase = 'http://115.245.93.26:4216/api/v1';
+const String _defaultPrivateBackendOrigin = 'http://115.245.93.26:4216';
 
 // Override the private backend bases via dart-define if needed.
 const String _localApiOverride = String.fromEnvironment(

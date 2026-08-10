@@ -15,6 +15,7 @@ import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/bin
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/captain_glass.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/captain_nav_bar.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/collection_progress_meter.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/trip_lifecycle_control.dart';
 import 'package:iwms_private_app/shared/widgets/crew_avatar_stack.dart';
 
 /// Captain Home — the "today-first" dashboard of the merged driver app.
@@ -160,6 +161,12 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
     final blockers = tripBlockers(trips);
     final blocker = blockers[t.assignmentUniqueId];
     final locked = blocker != null;
+    // Stops are greyed out and untappable until the driver presses Start —
+    // same treatment as a cross-trip lock, just without the lock banner
+    // (that's specifically "finish your other trip first" copy, which
+    // doesn't apply here).
+    final notStarted = !locked && !t.isFinished && !t.isStarted;
+    final stopsInert = locked || notStarted;
 
     final bottomSafeArea = MediaQuery.viewPaddingOf(context).bottom;
 
@@ -189,11 +196,27 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
               onOpenMap: () => widget.onOpenMap(t),
             ),
           const SizedBox(height: 12),
+          if (!locked && !t.isFinished) ...[
+            TripLifecycleControl(
+              trip: t,
+              locked: locked,
+              onChanged: widget.onRefresh,
+            ),
+            const SizedBox(height: 12),
+          ],
           _QuickActionsRow(
             onOpenMap: () => widget.onOpenMap(t),
             // Scanning a locked trip's bin is rejected by the backend
-            // (TRIP_LOCKED), so don't offer the scanner for it at all.
-            onScan: locked ? null : widget.onScan,
+            // (TRIP_LOCKED); scanning before Start is rejected with
+            // TRIP_NOT_STARTED — the friendlier client-side lead-in to that
+            // is `showStartRequiredSheet`, shown instead of dimming the icon
+            // away entirely.
+            onScan: locked
+                ? null
+                : (!t.isFinished && !t.isStarted
+                    ? () => showStartRequiredSheet(context)
+                    : widget.onScan),
+            scanDimmed: !locked && !t.isFinished && !t.isStarted,
             onHistory: widget.onOpenTrips ??
                 () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -217,7 +240,7 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
             _HouseholdTimeline(
               trip: t,
               onChanged: widget.onRefresh,
-              locked: locked,
+              locked: stopsInert,
             ),
           ] else ...[
             CollectionProgressMeter(collectionPoints: t.collectionPoints),
@@ -230,7 +253,7 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
             _StopsTimeline(
               trip: t,
               onChanged: widget.onRefresh,
-              locked: locked,
+              locked: stopsInert,
             ),
           ],
         ],
@@ -1033,6 +1056,19 @@ class _TripHeroCard extends StatelessWidget {
                             if (trip.wasteType.name.isNotEmpty)
                               _CompactInfoItem(
                                 icon: Icons.recycling_rounded,
+                                // Bin-collection trips show which waste
+                                // stream the round is for at a glance — wet
+                                // vs dry — via a dedicated asset icon rather
+                                // than the generic recycling glyph.
+                                // Household/bulk trips keep the generic icon
+                                // (icon stays as the fallback).
+                                iconAsset: trip.collectionType == 'bin_collection'
+                                    ? (trip.wasteType.isWet
+                                        ? 'assets/icons/bin.png'
+                                        : trip.wasteType.isDry
+                                            ? 'assets/icons/household.png'
+                                            : null)
+                                    : null,
                                 text: trip.wasteType.name,
                                 maxTextWidth: veryNarrow ? 92 : 128,
                               ),
@@ -1100,14 +1136,18 @@ class _TripStatusPill extends StatelessWidget {
 }
 
 /// Plain icon and text. No individual chip background, border or padding.
+/// [iconAsset], when given, renders that asset image instead of [icon] —
+/// used for the wet/dry waste-stream indicator on bin-collection trips.
 class _CompactInfoItem extends StatelessWidget {
   const _CompactInfoItem({
     required this.icon,
     required this.text,
     required this.maxTextWidth,
+    this.iconAsset,
   });
 
   final IconData icon;
+  final String? iconAsset;
   final String text;
   final double maxTextWidth;
 
@@ -1116,7 +1156,9 @@ class _CompactInfoItem extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: CaptainTheme.accent),
+        iconAsset != null
+            ? Image.asset(iconAsset!, width: 13, height: 13)
+            : Icon(icon, size: 13, color: CaptainTheme.accent),
         const SizedBox(width: 4),
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxTextWidth),
@@ -1223,6 +1265,7 @@ class _QuickActionsRow extends StatelessWidget {
     required this.onOpenMap,
     required this.onScan,
     required this.onHistory,
+    this.scanDimmed = false,
   });
 
   final VoidCallback onOpenMap;
@@ -1232,12 +1275,18 @@ class _QuickActionsRow extends StatelessWidget {
   final VoidCallback? onScan;
   final VoidCallback onHistory;
 
+  /// True when the trip hasn't been started yet — the scan icon stays
+  /// tappable (it opens `showStartRequiredSheet` via [onScan]) but reads as
+  /// dimmed/inactive, same visual treatment as a locked trip.
+  final bool scanDimmed;
+
   @override
   Widget build(BuildContext context) {
     Widget action({
       required String iconAsset,
       required String label,
       required VoidCallback? onTap,
+      bool dimmed = false,
     }) {
       final disabled = onTap == null;
       return Expanded(
@@ -1247,7 +1296,7 @@ class _QuickActionsRow extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Opacity(
-              opacity: disabled ? 0.4 : 1,
+              opacity: disabled || dimmed ? 0.4 : 1,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1286,6 +1335,7 @@ class _QuickActionsRow extends StatelessWidget {
           iconAsset: 'assets/icons/scan.png',
           label: 'Scan',
           onTap: onScan,
+          dimmed: scanDimmed,
         ),
         const SizedBox(width: 10),
         action(

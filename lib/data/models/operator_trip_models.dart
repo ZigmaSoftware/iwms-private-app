@@ -339,6 +339,39 @@ class OperatorTripWard {
   }
 }
 
+/// A Re-Trip request raised by [OperatorTripToday.retripRequest] while it
+/// awaits supervisor review — see `app/services/retrip_service.py` on the
+/// backend. Only ever the *pending* one, if any; approved/rejected requests
+/// don't come back here (the assignment itself reflects the outcome).
+class OperatorTripRetripRequest {
+  final String uniqueId;
+  final String status;
+  final String? reason;
+  final int pendingBinCount;
+  final int pendingHouseholdCount;
+  final DateTime? createdAt;
+
+  const OperatorTripRetripRequest({
+    required this.uniqueId,
+    required this.status,
+    this.reason,
+    this.pendingBinCount = 0,
+    this.pendingHouseholdCount = 0,
+    this.createdAt,
+  });
+
+  factory OperatorTripRetripRequest.fromJson(Map<String, dynamic> json) {
+    return OperatorTripRetripRequest(
+      uniqueId: json['unique_id']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'Pending',
+      reason: json['reason']?.toString(),
+      pendingBinCount: _parseInt(json['pending_bin_count']) ?? 0,
+      pendingHouseholdCount: _parseInt(json['pending_household_count']) ?? 0,
+      createdAt: _parseDate(json['created_at']),
+    );
+  }
+}
+
 class OperatorTripToday {
   final String assignmentUniqueId;
   final DateTime tripDate;
@@ -346,6 +379,9 @@ class OperatorTripToday {
   final String? scheduledTime;
   final String? actualStartTime;
   final String? actualEndTime;
+  final DateTime? actualStartAt;
+  final DateTime? actualEndAt;
+  final OperatorTripRetripRequest? retripRequest;
   // A trip is either panchayat- or ward-based; exactly one is set.
   final OperatorTripPanchayat? panchayat;
   final OperatorTripWard? ward;
@@ -387,6 +423,9 @@ class OperatorTripToday {
     this.scheduledTime,
     this.actualStartTime,
     this.actualEndTime,
+    this.actualStartAt,
+    this.actualEndAt,
+    this.retripRequest,
     this.crew,
   });
 
@@ -414,6 +453,9 @@ class OperatorTripToday {
         scheduledTime: scheduledTime,
         actualStartTime: actualStartTime,
         actualEndTime: actualEndTime,
+        actualStartAt: actualStartAt,
+        actualEndAt: actualEndAt,
+        retripRequest: retripRequest,
         crew: crew,
       );
 
@@ -435,6 +477,16 @@ class OperatorTripToday {
   /// the backend, so the app's lock and the scan endpoint agree.
   bool get isFinished =>
       status.toLowerCase() == 'completed' || progress.completed;
+
+  /// True once the driver has explicitly pressed "Start Trip" — mirrors the
+  /// backend's `require_trip_started` gate (which checks `actual_start_at`,
+  /// not the legacy wall-clock-only `actual_start_time`).
+  bool get isStarted => actualStartAt != null;
+
+  /// True while a Re-Trip request raised from this trip is awaiting
+  /// supervisor review — the driver can keep collecting, but End Trip is
+  /// already spoken for.
+  bool get hasPendingRetrip => retripRequest != null;
 
   /// `HH:mm` for the header/lock copy ("Finish your 06:30 trip first").
   String get scheduledTimeLabel {
@@ -518,6 +570,13 @@ class OperatorTripToday {
       scheduledTime: json['scheduled_time']?.toString(),
       actualStartTime: json['actual_start_time']?.toString(),
       actualEndTime: json['actual_end_time']?.toString(),
+      actualStartAt: _parseDate(json['actual_start_at']),
+      actualEndAt: _parseDate(json['actual_end_at']),
+      retripRequest: json['retrip_request'] is Map
+          ? OperatorTripRetripRequest.fromJson(
+              Map<String, dynamic>.from(json['retrip_request'] as Map),
+            )
+          : null,
       panchayat: json['panchayat'] is Map
           ? OperatorTripPanchayat.fromJson(
               Map<String, dynamic>.from(json['panchayat'] as Map),
@@ -747,6 +806,62 @@ class BinScanSubmitResult {
   }
 
   bool get tripCompleted => context.progress.completed;
+}
+
+/// Result of `POST .../trip-lifecycle/{id}/end/`. Three outcomes, not two:
+/// the trip closed outright ([ended]), it stayed open behind a new Re-Trip
+/// request ([retripRequested]), or the backend refused because stops remain
+/// and no [reason] was given yet ([reasonRequired]) — the caller re-prompts
+/// for a reason and calls end again, rather than treating this as a hard
+/// failure.
+class OperatorTripEndResult {
+  final bool ended;
+  final bool retripRequested;
+  final bool reasonRequired;
+  final int pendingBinCount;
+  final int pendingHouseholdCount;
+  final OperatorTripRetripRequest? retripRequest;
+  final OperatorTripToday? trip;
+
+  const OperatorTripEndResult({
+    required this.ended,
+    required this.retripRequested,
+    required this.reasonRequired,
+    this.pendingBinCount = 0,
+    this.pendingHouseholdCount = 0,
+    this.retripRequest,
+    this.trip,
+  });
+
+  factory OperatorTripEndResult.reasonRequired({
+    required int pendingBinCount,
+    required int pendingHouseholdCount,
+  }) =>
+      OperatorTripEndResult(
+        ended: false,
+        retripRequested: false,
+        reasonRequired: true,
+        pendingBinCount: pendingBinCount,
+        pendingHouseholdCount: pendingHouseholdCount,
+      );
+
+  factory OperatorTripEndResult.fromJson(Map<String, dynamic> json) {
+    final retripJson = json['retrip_request'];
+    final tripJson = json['trip'];
+    return OperatorTripEndResult(
+      ended: json['ended'] == true,
+      retripRequested: json['retrip_requested'] == true,
+      reasonRequired: false,
+      retripRequest: retripJson is Map
+          ? OperatorTripRetripRequest.fromJson(
+              Map<String, dynamic>.from(retripJson),
+            )
+          : null,
+      trip: tripJson is Map
+          ? OperatorTripToday.fromJson(Map<String, dynamic>.from(tripJson))
+          : null,
+    );
+  }
 }
 
 /// One person (driver or operator) — used in trip history detail.

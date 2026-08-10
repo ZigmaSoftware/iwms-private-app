@@ -7,18 +7,19 @@ import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/push/push_notification_service.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/data/repositories/staff_notification_repository.dart';
+import 'package:iwms_private_app/data/repositories/trip_retrip_repository.dart';
 import 'package:iwms_private_app/data/repositories/vehicle_breakdown_repository.dart';
 import 'package:iwms_private_app/modules/module1_citizen/citizen/map.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_grievance_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_history_screen.dart';
-import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_households_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_staff_attendance_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_staff_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_teams_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_vehicles_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_breakdowns_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_retrip_requests_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_collection_points_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_grievance_screen.dart';
@@ -61,13 +62,14 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
       SupervisorGrievanceRepository();
   int _grievanceCount = 0;
   int _collectionPointCount = 0;
-  int _householdCount = 0;
   int _pendingBreakdownCount = 0;
+  int _pendingRetripCount = 0;
   int _unreadNotificationCount = 0;
   final StaffNotificationRepository _notificationRepo =
       StaffNotificationRepository();
   final VehicleBreakdownRepository _breakdownRepo =
       VehicleBreakdownRepository();
+  final TripRetripRepository _retripRepo = TripRetripRepository();
 
   @override
   void initState() {
@@ -75,6 +77,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
     _loadGrievanceCount();
     _loadHierarchyCounts();
     _loadPendingBreakdownCount();
+    _loadPendingRetripCount();
     _loadUnreadNotificationCount();
     unawaited(PushNotificationService.instance.initAndRegister(
       registerUrl: ApiConfig.registerStaffFcmToken,
@@ -87,6 +90,14 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
           await _breakdownRepo.fetchBreakdowns(approvalStatus: 'PENDING');
       if (!mounted) return;
       setState(() => _pendingBreakdownCount = reports.length);
+    } catch (_) {}
+  }
+
+  Future<void> _loadPendingRetripCount() async {
+    try {
+      final requests = await _retripRepo.fetchRequests(status: 'Pending');
+      if (!mounted) return;
+      setState(() => _pendingRetripCount = requests.length);
     } catch (_) {}
   }
 
@@ -117,11 +128,9 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
     try {
       final repo = SupervisorRepository();
       final collectionPoints = await repo.fetchCollectionPoints();
-      final households = await repo.fetchHouseholds();
       if (!mounted) return;
       setState(() {
         _collectionPointCount = collectionPoints.length;
-        _householdCount = households.length;
       });
     } catch (_) {}
   }
@@ -184,6 +193,9 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
         context.read<SupervisorBloc>().add(const SupervisorRefreshRequested());
         await _loadGrievanceCount();
         await _loadHierarchyCounts();
+        await _loadPendingBreakdownCount();
+        await _loadPendingRetripCount();
+        await _loadUnreadNotificationCount();
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -274,7 +286,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
             label: 'Reports',
             selected:
                 _selectedQuickActionFilter == _QuickActionFilter.approvals,
-            badgeCount: _pendingBreakdownCount,
+            badgeCount: _pendingBreakdownCount + _pendingRetripCount,
             onTap: () => setState(() =>
                 _selectedQuickActionFilter = _QuickActionFilter.approvals),
           ),
@@ -327,25 +339,6 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                 builder: (_) => BlocProvider<SupervisorBloc>.value(
                   value: bloc,
                   child: const SupervisorCollectionPointsScreen(),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-      _QuickActionSpec(
-        filter: _QuickActionFilter.actions,
-        tile: SupervisorGlassActionTile(
-          iconAsset: 'assets/icons/house.png',
-          label: 'Households',
-          badgeLabel: '$_householdCount',
-          onTap: () {
-            final bloc = context.read<SupervisorBloc>();
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => BlocProvider<SupervisorBloc>.value(
-                  value: bloc,
-                  child: const SupervisorHouseholdsScreen(),
                 ),
               ),
             );
@@ -482,6 +475,22 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
               ),
             );
             _loadPendingBreakdownCount();
+          },
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.approvals,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/garbage-truck.png',
+          label: 'Re-Trips',
+          badgeLabel: _pendingRetripCount > 0 ? '$_pendingRetripCount' : null,
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SupervisorRetripRequestsScreen(),
+              ),
+            );
+            _loadPendingRetripCount();
           },
         ),
       ),

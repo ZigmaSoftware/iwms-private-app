@@ -28,6 +28,8 @@ class SupervisorProfileScreen extends StatefulWidget {
 
 class _SupervisorProfileScreenState extends State<SupervisorProfileScreen> {
   bool _loading = true;
+  String? _companyName;
+  String? _projectName;
   String? _designation;
   String? _department;
   String? _mobile;
@@ -68,6 +70,8 @@ class _SupervisorProfileScreenState extends State<SupervisorProfileScreen> {
         final data = json['data'] as Map?;
         final personal = data?['personal'] as Map?;
         setState(() {
+          _companyName = data?['company_name']?.toString();
+          _projectName = data?['project_name']?.toString();
           _designation = data?['designation']?.toString();
           _department = data?['department']?.toString();
           _mobile = personal?['contact_mobile']?.toString();
@@ -147,6 +151,18 @@ class _SupervisorProfileScreenState extends State<SupervisorProfileScreen> {
                     'Employee ID',
                     _employeeId?.trim().isNotEmpty == true
                         ? _employeeId!
+                        : 'Not available'),
+                _detailRow(
+                    Icons.apartment_outlined,
+                    'Company',
+                    _companyName?.trim().isNotEmpty == true
+                        ? _companyName!
+                        : 'Not available'),
+                _detailRow(
+                    Icons.corporate_fare_rounded,
+                    'Project',
+                    _projectName?.trim().isNotEmpty == true
+                        ? _projectName!
                         : 'Not available'),
                 _detailRow(
                     Icons.shield_outlined,

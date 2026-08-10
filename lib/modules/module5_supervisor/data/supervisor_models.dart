@@ -177,6 +177,8 @@ class SupervisorAssignment {
     this.hasBin = false,
     this.hasHousehold = false,
     this.hasBulk = false,
+    this.tripCount = 1,
+    this.totalTripTimeSeconds,
   });
 
   final String uniqueId;
@@ -199,6 +201,12 @@ class SupervisorAssignment {
   final bool hasBin;
   final bool hasHousehold;
   final bool hasBulk;
+  // This assignment's 1-based position among today's assignments for the
+  // same trip plan — 1 for the ordinary run, 2+ for a Re-Trip continuation.
+  // Only populated from the daily-trip-assignments list (not trip logs).
+  final int tripCount;
+  // Wall-clock duration on the trip, in whole seconds — null until started.
+  final int? totalTripTimeSeconds;
 
   /// "Bin Collection", "Household Collection", "Bulk Waste Collection", a
   /// combination, or "Collection" if none of the flags are set.
@@ -317,6 +325,9 @@ class SupervisorAssignment {
       hasBin: collectionTypes['has_bin'] == true,
       hasHousehold: collectionTypes['has_household'] == true,
       hasBulk: collectionTypes['has_bulk'] == true,
+      tripCount: int.tryParse(json['trip_count']?.toString() ?? '') ?? 1,
+      totalTripTimeSeconds:
+          int.tryParse(json['total_trip_time_seconds']?.toString() ?? ''),
     );
   }
 
@@ -553,38 +564,95 @@ double _numKg(dynamic v) {
   return double.tryParse(v.toString()) ?? 0;
 }
 
-/// A single day's collected-waste totals (kg), sourced from the daily trip log
-/// (bin = `collected_weight_kg`, household = `household_collected_weight_kg`).
-/// Multiple logs can share a date; the chart buckets/sums them.
+/// A single day's collected-waste totals (kg), bucketed by the actual waste
+/// stream — Wet vs Dry — sourced from each collected bin's own waste type
+/// (`BinCollectionEvent.waste_type` / `Bins.wastetype_id`), not from the
+/// bin-vs-household *stop kind* the daily trip log tracks. Multiple events
+/// can share a date; the chart sums them.
 class SupervisorWastePoint {
   const SupervisorWastePoint({
     required this.date,
-    required this.binKg,
-    required this.householdKg,
-    required this.logStatus,
+    required this.wetKg,
+    required this.dryKg,
+    required this.otherKg,
   });
 
   final DateTime date;
-  final double binKg;
-  final double householdKg;
-  // "Draft" / "Submitted" / "Verified" (DailyTripLog.log_status) — lets the
-  // waste summary cards split collected weight into Verified vs Pending.
-  final String logStatus;
+  final double wetKg;
+  final double dryKg;
+  // Anything collected under a waste type that is neither Wet nor Dry
+  // (e.g. Sanitary, Bio-medical, Mixed) — kept out of the two named cards
+  // but still counted in the total so the ring/total figure stays accurate.
+  final double otherKg;
 
-  double get totalKg => binKg + householdKg;
-  bool get isVerified => logStatus == 'Verified';
+  double get totalKg => wetKg + dryKg + otherKg;
 
-  factory SupervisorWastePoint.fromLogJson(Map<String, dynamic> j) {
+  factory SupervisorWastePoint.fromEventJson(Map<String, dynamic> j) {
+    final date = DateTime.tryParse(_str(j['collection_date'])) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final weight = _numKg(j['collected_weight_kg']);
+    final wasteType = j['waste_type'];
+    final name = wasteType is Map
+        ? _str(wasteType['waste_type_name']).toLowerCase()
+        : '';
+
     return SupervisorWastePoint(
-      date: DateTime.tryParse(_str(j['trip_date'])) ??
-          DateTime.fromMillisecondsSinceEpoch(0),
-      binKg: _numKg(j['collected_weight_kg']),
-      householdKg: _numKg(j['household_collected_weight_kg']),
-      logStatus: _str(j['log_status']),
+      date: date,
+      wetKg: name.contains('wet') ? weight : 0,
+      dryKg: name.contains('dry') ? weight : 0,
+      otherKg: (name.contains('wet') || name.contains('dry')) ? 0 : weight,
     );
   }
 
   bool get hasValidDate => date.millisecondsSinceEpoch > 0;
+}
+
+/// One `BinCollectionEvent` row, kept in full (not just summed into
+/// [SupervisorWastePoint]) so the waste-summary cards' tap-through detail
+/// view can group collections by vehicle and list each one's collection
+/// points/status without a second network round trip.
+class SupervisorWasteEvent {
+  const SupervisorWasteEvent({
+    required this.date,
+    required this.weightKg,
+    required this.wasteTypeName,
+    this.vehicleUniqueId,
+    this.vehicleNo,
+    this.collectionPointName,
+    this.tripAssignmentId,
+    this.status,
+  });
+
+  final DateTime date;
+  final double weightKg;
+  final String wasteTypeName;
+  final String? vehicleUniqueId;
+  final String? vehicleNo;
+  final String? collectionPointName;
+  final String? tripAssignmentId;
+  final String? status;
+
+  bool get isWet => wasteTypeName.toLowerCase().contains('wet');
+  bool get isDry => wasteTypeName.toLowerCase().contains('dry');
+  bool get hasValidDate => date.millisecondsSinceEpoch > 0;
+
+  factory SupervisorWasteEvent.fromJson(Map<String, dynamic> j) {
+    final date = DateTime.tryParse(_str(j['collection_date'])) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final wasteType = j['waste_type'];
+    final vehicle = j['vehicle'];
+    final cp = j['collection_point'];
+    return SupervisorWasteEvent(
+      date: date,
+      weightKg: _numKg(j['collected_weight_kg']),
+      wasteTypeName: wasteType is Map ? _str(wasteType['waste_type_name']) : '',
+      vehicleUniqueId: vehicle is Map ? _str(vehicle['unique_id']) : null,
+      vehicleNo: vehicle is Map ? _str(vehicle['vehicle_no']) : null,
+      collectionPointName: cp is Map ? _str(cp['cp_name']) : null,
+      tripAssignmentId: _str(j['trip_assignment_id']),
+      status: _str(j['status']),
+    );
+  }
 }
 
 /// A staff member (from `user-creations/staffcreation/`), used by the Staffs

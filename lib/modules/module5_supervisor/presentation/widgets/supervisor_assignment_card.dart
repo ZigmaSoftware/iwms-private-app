@@ -117,6 +117,10 @@ class SupervisorAssignmentCard extends StatelessWidget {
                       const SizedBox(height: 10),
                       _progressRow(),
                     ],
+                    if (assignment.isCompleted) ...[
+                      const SizedBox(height: 8),
+                      _completedDetailRow(),
+                    ],
                   ],
                 ),
               ),
@@ -297,6 +301,46 @@ class SupervisorAssignmentCard extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Shown only once a trip is completed: how long it actually took, plus
+  /// (when this assignment is itself a Re-Trip continuation) which attempt
+  /// this was — e.g. "Trip 2" for the continuation of an earlier trip that
+  /// was closed early. Ported from the government app's identically-named
+  /// `_completedDetailRow` on its assignment card.
+  Widget _completedDetailRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: _progressPill(
+            icon: Icons.timer_outlined,
+            color: SupervisorTheme.accent,
+            label: 'Trip time',
+            value: _formatDuration(assignment.totalTripTimeSeconds),
+          ),
+        ),
+        if (assignment.tripCount > 1) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: _progressPill(
+              icon: Icons.replay_rounded,
+              color: SupervisorTheme.warning,
+              label: 'Attempt',
+              value: 'Trip ${assignment.tripCount}',
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _formatDuration(int? seconds) {
+    if (seconds == null || seconds <= 0) return '—';
+    final d = Duration(seconds: seconds);
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    if (h > 0) return '${h}h ${m}m';
+    return '${m}m';
   }
 
   Widget _progressPill({
