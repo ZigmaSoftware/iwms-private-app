@@ -7,7 +7,7 @@ import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/s
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 
-/// Staffs — the company's staff list grouped by designation.
+/// Staffs — the company's staff list grouped by role.
 class SupervisorStaffScreen extends StatefulWidget {
   const SupervisorStaffScreen({super.key});
 
@@ -38,7 +38,12 @@ class _SupervisorStaffScreenState extends State<SupervisorStaffScreen> {
       final staff = await _repo.fetchStaff();
       final grouped = <String, List<SupervisorStaff>>{};
       for (final s in staff) {
-        grouped.putIfAbsent(s.designation, () => []).add(s);
+        // Group by ROLE ("Company Driver", "Company Supervisor"), not
+        // designation. Designation is optional on Staffcreation and is unset
+        // for every seeded staff member, so grouping on it collapsed the whole
+        // list into a single "Unspecified" bucket while the role — which the
+        // card already prints — was sitting right there.
+        grouped.putIfAbsent(s.groupLabel, () => []).add(s);
       }
       if (!mounted) return;
       setState(() {
@@ -81,7 +86,7 @@ class _SupervisorStaffScreenState extends State<SupervisorStaffScreen> {
       );
     }
 
-    final designations = _grouped.keys.toList()..sort();
+    final roles = _grouped.keys.toList()..sort();
 
     return RefreshIndicator(
       color: SupervisorTheme.accent,
@@ -90,19 +95,19 @@ class _SupervisorStaffScreenState extends State<SupervisorStaffScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
-          for (final designation in designations) ...[
+          for (final role in roles) ...[
             _DesignationSection(
-              title: designation,
-              count: _grouped[designation]!.length,
-              expanded: _expanded.contains(designation),
+              title: role,
+              count: _grouped[role]!.length,
+              expanded: _expanded.contains(role),
               onToggle: () {
                 setState(() {
-                  if (!_expanded.add(designation)) {
-                    _expanded.remove(designation);
+                  if (!_expanded.add(role)) {
+                    _expanded.remove(role);
                   }
                 });
               },
-              children: _grouped[designation]!
+              children: _grouped[role]!
                   .map((s) => Padding(
                         padding: const EdgeInsets.only(top: 10),
                         child: _StaffCard(staff: s),

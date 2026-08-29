@@ -6,7 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum MapStyle { standard, light, dark, satellite }
 
 /// The map style shown before a preference is loaded / when none is saved.
-const MapStyle kDefaultMapStyle = MapStyle.light;
+//
+// Was MapStyle.light (CARTO Positron), but CARTO killed free anonymous
+// access and Esri's key-less Light/Dark Canvas has real coverage gaps in
+// India at close zoom (confirmed: empty "Map data not yet available" tiles
+// over Bangalore at z18). OpenStreetMap standard has full coverage here, so
+// it's the default until a paid tile provider (MapTiler/Stadia/etc.) is
+// wired in — see the NOTE below on _kMapStyles.
+const MapStyle kDefaultMapStyle = MapStyle.standard;
 
 /// Persists the chosen base-map style on the device so it survives logout /
 /// app restarts and is restored every time the user opens a map.
@@ -44,28 +51,60 @@ class _MapStyleSpec {
   const _MapStyleSpec(this.label, this.icon, this.urlTemplate, this.subdomains);
 }
 
-// Free, key-less raster tile sources (same ones Leaflet/flutter_map commonly use):
-// - OpenStreetMap standard        (Default)
-// - CARTO Positron / Dark Matter  (Light / Dark)
-// - Esri World Imagery            (Satellite)
+// Raster tile sources. All currently point at OpenStreetMap's standard
+// tiles or Esri's key-less services — see the two NOTEs below for why, and
+// what to fix once a proper paid tile key (MapTiler/Stadia/etc.) is set up.
+//
+// NOTE 1 (Light/Dark): previously CARTO Positron/Dark Matter
+// (basemaps.cartocdn.com/{light,dark}_all). CARTO has retired free
+// anonymous access to that CDN — every tile now comes back with an "API KEY
+// REQUIRED" watermark instead of map data (confirmed directly against the
+// CDN on 2026-08-27). Esri's key-less Light/Dark Gray Canvas was tried as a
+// replacement but has real coverage gaps in India at close zoom (confirmed:
+// blank "Map data not yet available" tiles over Bangalore at z18) — not
+// usable for this app's actual routes. Both now fall back to OSM standard
+// until a real paid provider is wired in.
+//
+// NOTE 2 (Standard/OSM in general): OpenStreetMap's tile servers actively
+// rate-limit/block traffic that doesn't follow their usage policy
+// (osm.wiki/Blocked) — a burst of requests during testing briefly returned
+// a 418 "Access blocked" tile image instead of map data, though normal
+// single-device traffic worked fine. OSM's own policy discourages embedding
+// their tile servers directly in apps at any real scale, so this is a
+// known risk for production traffic, not just a one-off. If map loads start
+// silently failing/showing block tiles for users, this is why — the real
+// fix is a paid tile provider (MapTiler has a generous free tier and is
+// built for exactly this use case).
 const Map<MapStyle, _MapStyleSpec> _kMapStyles = {
   MapStyle.standard: _MapStyleSpec(
     'Default',
     Icons.map_outlined,
-    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    ['a', 'b', 'c'],
+    // No {s} subdomain: OSM deprecated the a/b/c load-balancing scheme
+    // (github.com/openstreetmap/operations/issues/737) — flutter_map warns
+    // on it, and it's exactly the kind of policy-non-compliant usage that
+    // risks a 418 block.
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    [],
   ),
   MapStyle.light: _MapStyleSpec(
     'Light',
     Icons.light_mode_outlined,
-    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-    ['a', 'b', 'c', 'd'],
+    // No {s} subdomain: OSM deprecated the a/b/c load-balancing scheme
+    // (github.com/openstreetmap/operations/issues/737) — flutter_map warns
+    // on it, and it's exactly the kind of policy-non-compliant usage that
+    // risks a 418 block.
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    [],
   ),
   MapStyle.dark: _MapStyleSpec(
     'Dark',
     Icons.dark_mode_outlined,
-    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-    ['a', 'b', 'c', 'd'],
+    // No {s} subdomain: OSM deprecated the a/b/c load-balancing scheme
+    // (github.com/openstreetmap/operations/issues/737) — flutter_map warns
+    // on it, and it's exactly the kind of policy-non-compliant usage that
+    // risks a 418 block.
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    [],
   ),
   MapStyle.satellite: _MapStyleSpec(
     'Satellite',

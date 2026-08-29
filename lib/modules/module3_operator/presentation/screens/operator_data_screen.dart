@@ -85,6 +85,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   final Map<String, TextEditingController> _manualWeightControllers = {};
 
   List<Map<String, dynamic>> wasteTypes = [];
+  // True when the customer's waste-type lookup errored (as opposed to the
+  // customer genuinely having none), so the two cases read differently.
+  bool _wasteTypesLoadFailed = false;
   Map<String, Map<String, dynamic>> _wasteData = {};
 
   bool _canApplyLiveWeight(String type) {
@@ -94,11 +97,13 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   }
 
   // ✅ Define defaults as final so we can reuse them safely
-  final List<Map<String, dynamic>> defaultWasteTypes = [
-    {"id": 1, "waste_type_name": "Wet"},
-    {"id": 2, "waste_type_name": "Dry"},
-    {"id": 3, "waste_type_name": "Mixed"},
-  ];
+  // NO hardcoded waste types. The streams shown here are ONLY ever the ones
+  // saved against this customer in Customer Creation, fetched via
+  // `waste/get-waste-types/?customer_id=`. A local fallback list used to be
+  // substituted whenever that call returned empty or failed, which silently
+  // showed streams (e.g. "Mixed") the customer was never registered for and
+  // made a waste type removed on the web look like it was still there.
+  // If the customer has none, the driver sees an explicit empty/error state.
 
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
@@ -129,8 +134,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     latestWeight = "--";
     _historyService = getIt<CollectionHistoryService>();
 
-    // ✅ Initialize with defaults immediately so UI is never empty
-    _applyWasteTypes(defaultWasteTypes);
+    // Start empty — the customer's real streams arrive from _fetchWasteTypes().
+    _applyWasteTypes(const []);
 
     if (_bluetoothSupported && !widget.skipBluetoothInit) {
       // 🔁 Bluetooth adapter re-init with 1s Delay (Android only)
@@ -164,8 +169,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   // ==================== FETCH WASTE TYPES ====================
   Future<void> _fetchWasteTypes() async {
-    // Start with defaults. We only overwrite if API gives valid NON-EMPTY data.
-    List<Map<String, dynamic>> resolvedTypes = defaultWasteTypes;
+    // The customer's registered streams are the ONLY source. An empty result
+    // means "this customer has no waste types saved" and must stay empty; a
+    // failure must surface, not quietly render a different set of streams.
+    List<Map<String, dynamic>> resolvedTypes = const [];
+    var loadFailed = false;
 
     try {
       final response = await http
@@ -177,24 +185,27 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           )
           .timeout(const Duration(seconds: 5));
 
-      final data = json.decode(response.body);
-
-      if (data['status'] == 'success' && data['data'] != null) {
-        final fetched = List<Map<String, dynamic>>.from(data['data']);
-
-        // ✅ CRITICAL FIX: Only use API data if it's NOT empty.
-        // If API returns [], we keep the defaults.
-        if (fetched.isNotEmpty) {
-          resolvedTypes = fetched;
+      if (response.statusCode != 200) {
+        // The backend rejects a missing/unknown customer_id with 400/404
+        // rather than falling back to every active waste type.
+        loadFailed = true;
+        debugPrint(
+            '⚠ Waste type lookup failed: HTTP ${response.statusCode} ${response.body}');
+      } else {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success' && data['data'] != null) {
+          resolvedTypes = List<Map<String, dynamic>>.from(data['data']);
         } else {
-          debugPrint(
-              '⚠️ API returned empty waste types list. Keeping defaults.');
+          loadFailed = true;
+          debugPrint('⚠ Waste type lookup returned an error payload: $data');
         }
       }
     } catch (e) {
-      debugPrint('⚠ Waste type API failed, using fallback defaults: $e');
-      // resolvedTypes remains defaultWasteTypes
+      loadFailed = true;
+      debugPrint('⚠ Waste type API failed: $e');
     }
+
+    _wasteTypesLoadFailed = loadFailed;
 
     if (!mounted) return;
     _applyWasteTypes(resolvedTypes);
@@ -1755,7 +1766,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                           border: Border.all(color: OperatorTheme.hairline),
                         ),
                         child: Text(
-                          "No waste types configured.",
+                          _wasteTypesLoadFailed
+                              ? "Couldn't load this customer's waste types. "
+                                  "Check your connection and retry."
+                              : "No waste types are registered for this "
+                                  "customer in Customer Creation.",
                           style: AppTextStyles.bodyMedium.copyWith(
                             color: OperatorTheme.mutedText,
                           ),

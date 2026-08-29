@@ -280,6 +280,18 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
 
         _carouselItemExtent = cardWidth + gap;
 
+        // The carousel is the first child of a vertical ListView. Scroll far
+        // enough down and that ListView unmounts it (a plain child is not kept
+        // alive), which disposes the horizontal ScrollPosition. Scrolling back
+        // up builds a *new* position at the controller's initialScrollOffset —
+        // 0.0 — so the strip snapped to trip 1 even though `_selected` still
+        // pointed at trip 2. `didUpdateWidget` could not repair it: it only
+        // jumps when the resolved index CHANGES, and here nothing changed.
+        // Re-assert the offset that `_selected` implies once this layout is in.
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _restoreCarouselOffset(selected),
+        );
+
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -323,6 +335,29 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
         );
       },
     );
+  }
+
+  /// Re-align the strip with [selected] after the scroll position has been
+  /// rebuilt from scratch (see the call site). Deliberately inert while the
+  /// driver is mid-gesture or a snap animation is running, so this never
+  /// fights an interaction — it only repairs a position that was reset
+  /// underneath us.
+  void _restoreCarouselOffset(int selected) {
+    if (!mounted ||
+        _carouselSnapping ||
+        !_carouselController.hasClients ||
+        _carouselItemExtent <= 0) {
+      return;
+    }
+    final position = _carouselController.position;
+    if (position.isScrollingNotifier.value) return;
+
+    final target = (selected * _carouselItemExtent)
+        .clamp(0.0, position.maxScrollExtent)
+        .toDouble();
+    if ((_carouselController.offset - target).abs() < 0.5) return;
+
+    _carouselController.jumpTo(target);
   }
 
   Future<void> _snapCarousel(int itemCount) async {

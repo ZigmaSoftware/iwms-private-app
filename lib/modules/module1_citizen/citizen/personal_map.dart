@@ -219,17 +219,23 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
         },
       ),
       children: [
+        // CARTO retired free anonymous access to basemaps.cartocdn.com (now
+        // returns an "API KEY REQUIRED" watermark). Esri's key-less Light
+        // Gray Canvas was tried next but has real coverage gaps in India at
+        // close zoom (blank tiles over Bangalore at z18), so this falls
+        // back to OSM standard for now — see the NOTE in
+        // core/map/map_style.dart for the full story and the real fix (a
+        // paid tile provider).
         TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
+          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          subdomains: const ['a', 'b', 'c'],
           userAgentPackageName: 'com.zigma.iwmsprivateapp',
         ),
         PolygonLayer(polygons: polygons),
         if (markers.isNotEmpty) MarkerLayer(markers: markers),
         RichAttributionWidget(
           attributions: const [
-            TextSourceAttribution('© OpenStreetMap, © CARTO'),
+            TextSourceAttribution('© OpenStreetMap contributors'),
           ],
         ),
       ],

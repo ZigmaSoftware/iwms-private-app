@@ -8,7 +8,6 @@ import 'package:iwms_private_app/logic/auth/auth_state.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/attendance/supervisor_attendance_page.dart';
-import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_assignments_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_attendance_screen.dart'
     as attendance;
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_home_page.dart';
@@ -65,30 +64,6 @@ class _SupervisorShellState extends State<_SupervisorShell> {
 
   void _logout() {
     context.read<AuthBloc>().add(AuthLogoutRequested());
-  }
-
-  void _openAssignments() {
-    // Review list is no longer a bottom-nav tab (Attendance took its slot), so
-    // the dashboard's "Review" affordance opens it as a pushed screen, sharing
-    // the existing SupervisorBloc.
-    final bloc = context.read<SupervisorBloc>();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => BlocProvider<SupervisorBloc>.value(
-          value: bloc,
-          child: Scaffold(
-            backgroundColor: SupervisorTheme.background,
-            appBar: AppBar(
-              backgroundColor: SupervisorTheme.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              title: const Text('Review'),
-            ),
-            body: const SupervisorAssignmentsScreen(),
-          ),
-        ),
-      ),
-    );
   }
 
   void _openTeam() {
@@ -211,7 +186,6 @@ class _SupervisorShellState extends State<_SupervisorShell> {
           empId: empId,
           onLogout: _logout,
           onOpenTrips: () => _setTab(SupervisorNavTab.trips),
-          onOpenAssignments: _openAssignments,
           onOpenTeam: _openTeam,
         );
       case SupervisorNavTab.trips:

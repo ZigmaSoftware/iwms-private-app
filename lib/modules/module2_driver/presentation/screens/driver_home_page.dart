@@ -31,6 +31,7 @@ import 'package:iwms_private_app/core/ors_service.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/screens/captain_home_tab.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/state/collection_mode_store.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/state/trip_sequence.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/driver_theme.dart';
@@ -179,14 +180,17 @@ class _DriverHomePageState extends State<DriverHomePage> {
     super.initState();
     // Hydrate the persisted light/dark choice before first paint settles.
     CaptainThemeStore.load();
+    // Hydrate the persisted Household/Bin toggle choice the same way.
+    CollectionModeStore.load();
     _tripRepository = getIt<OperatorTripRepository>();
     unawaited(PushNotificationService.instance.initAndRegister(
       registerUrl: ApiConfig.registerStaffFcmToken,
     ));
     _refreshUnreadNotificationCount();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _centerOnDriver(GammaGeofenceConfig.center),
-    );
+    // No initial _centerOnDriver call here: FlutterMap only mounts once the
+    // Map tab is selected (see _buildTab), so the controller isn't attached
+    // on first frame. MapOptions.initialCenter already places the map
+    // correctly when it does mount.
     _loadAssignmentsForDriver();
   }
 
@@ -229,7 +233,33 @@ class _DriverHomePageState extends State<DriverHomePage> {
     _mapController.move(target, 15.0);
   }
 
-  List<OperatorTripToday> get _visibleTodayTrips => _todayTrips;
+  bool _tripMatchesMode(OperatorTripToday trip, CollectionMode mode) {
+    return mode == CollectionMode.household
+        ? trip.isHousehold
+        : !trip.isHousehold;
+  }
+
+  List<OperatorTripToday> _tripsForMode(
+    CollectionMode mode, [
+    List<OperatorTripToday>? source,
+  ]) {
+    final trips = source ?? _todayTrips;
+    return trips.where((trip) => _tripMatchesMode(trip, mode)).toList();
+  }
+
+  List<OperatorTripToday> get _visibleTodayTrips =>
+      _tripsForMode(CollectionModeStore.mode.value);
+
+  OperatorTripToday? _tripById(
+    Iterable<OperatorTripToday> trips,
+    String? assignmentUniqueId,
+  ) {
+    if (assignmentUniqueId == null || assignmentUniqueId.isEmpty) return null;
+    for (final trip in trips) {
+      if (trip.assignmentUniqueId == assignmentUniqueId) return trip;
+    }
+    return null;
+  }
 
   LatLng _anchorForVisibleTripStops(
     List<_DriverAssignmentStop> stops,
@@ -251,6 +281,60 @@ class _DriverHomePageState extends State<DriverHomePage> {
     final trip = _todayTrip;
     if (trip == null) return null;
     return tripBlockers(_visibleTodayTrips)[trip.assignmentUniqueId];
+  }
+
+  /// Re-derive the selected trip for [mode] from [sourceTrips] (defaulting to
+  /// `_todayTrips`), preferring — in order — [preferredTripId], whatever trip
+  /// is currently shown on the Map tab, whatever trip is currently `_todayTrip`,
+  /// and finally the first workable trip in the mode.
+  ///
+  /// This is the single place selection is (re)computed after ANY trips
+  /// refresh — including pull-to-refresh — specifically so a refresh never
+  /// silently discards the trip the driver is actually looking at. Before
+  /// this existed, `_loadAssignmentsForDriver` always reset `_todayTrip` to
+  /// "first trip with collection points", so scrolling the Home tab (which
+  /// can trigger `RefreshIndicator`'s pull-to-refresh even on a small
+  /// overscroll-and-release) would silently snap the driver back to the bin
+  /// trip after they'd explicitly opened a household trip's map.
+  void _applyCollectionModeState(
+    CollectionMode mode, {
+    List<OperatorTripToday>? sourceTrips,
+    String? preferredTripId,
+  }) {
+    final allTrips = sourceTrips ?? _todayTrips;
+    final visibleTrips = _tripsForMode(mode, allTrips);
+    final selectedTrip = _tripById(visibleTrips, preferredTripId) ??
+        _tripById(visibleTrips, _mapTrip?.assignmentUniqueId) ??
+        _tripById(visibleTrips, _todayTrip?.assignmentUniqueId) ??
+        // Land on the trip the driver can actually work — with a morning and
+        // an afternoon bin run, opening on the locked afternoon card would be
+        // a dead end.
+        firstWorkableTrip(visibleTrips);
+    final detail = selectedTrip?.toHistoryDetail();
+    final (stops, tripStops) = _buildMapStopsForTrip(selectedTrip);
+
+    setState(() {
+      _todayTrip = selectedTrip;
+      _mapTrip = selectedTrip;
+      _customers = stops;
+      _tripStops = tripStops;
+      _tripPolyline = const [];
+      _activeTripId = selectedTrip?.assignmentUniqueId;
+      _activeRoutePlanId = detail?.summary.tripPlan?.uniqueId;
+      _activeVehicleType = null;
+      _activeTripDetail = detail;
+      _staticDriverLocation = _anchorForVisibleTripStops(stops, tripStops);
+      _currentAssignments = [
+        if (selectedTrip != null) selectedTrip.toHistorySummary(),
+      ];
+    });
+  }
+
+  Future<void> _onCollectionModeChanged(CollectionMode mode) async {
+    if (CollectionModeStore.mode.value == mode) return;
+    await CollectionModeStore.set(mode);
+    if (!mounted) return;
+    _applyCollectionModeState(mode, preferredTripId: _todayTrip?.assignmentUniqueId);
   }
 
   @override
@@ -295,13 +379,20 @@ class _DriverHomePageState extends State<DriverHomePage> {
             // flips so every mode-aware token re-resolves.
             return ValueListenableBuilder<bool>(
               valueListenable: CaptainThemeStore.isDark,
-              builder: (context, _, __) => _buildShell(
-                context,
-                driverLocation,
-                nameFromState,
-                empIdFromState,
-                employeeIdFromState,
-                selectedVehicle,
+              builder: (context, _, __) => ValueListenableBuilder<CollectionMode>(
+                // Rebuild when the Household/Bin toggle flips, so the
+                // carousel, home list, map and scan button all switch to
+                // showing only the selected mode's trips.
+                valueListenable: CollectionModeStore.mode,
+                builder: (context, collectionMode, __) => _buildShell(
+                  context,
+                  driverLocation,
+                  nameFromState,
+                  empIdFromState,
+                  employeeIdFromState,
+                  selectedVehicle,
+                  collectionMode,
+                ),
               ),
             );
           },
@@ -317,9 +408,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
     String? empIdFromState,
     String? employeeIdFromState,
     VehicleModel? selectedVehicle,
+    CollectionMode collectionMode,
   ) {
     final pullInHeader =
         _activeTab == _DriverTab.attendance || _activeTab == _DriverTab.profile;
+    // The toggle is only relevant on tabs that actually show trips.
+    final showCollectionToggle =
+        _activeTab == _DriverTab.home || _activeTab == _DriverTab.map;
 
     return Scaffold(
       backgroundColor: DriverTheme.background,
@@ -340,6 +435,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
               onNotificationsTap: _openNotifications,
               unreadNotificationCount: _unreadNotificationCount,
               collapsed: pullInHeader,
+              showCollectionModeToggle: showCollectionToggle,
+              collectionMode: collectionMode,
+              onCollectionModeChanged: _onCollectionModeChanged,
             ),
             Expanded(
               child: PageTransitionSwitcher(
@@ -520,6 +618,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _assignmentError = null;
         _tripError = null;
       });
+      // Re-derive the selection against the current mode, preferring
+      // whatever trip the driver already had selected — see
+      // _applyCollectionModeState's doc comment for why this matters. Without
+      // it, every refresh above (including a pull-to-refresh gesture) would
+      // silently discard the driver's selection and reset to the naive
+      // "first trip with collection points" pick.
+      _applyCollectionModeState(CollectionModeStore.mode.value);
     } catch (e) {
       setState(() {
         _loadingCustomers = false;

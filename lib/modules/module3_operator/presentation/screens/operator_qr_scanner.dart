@@ -14,10 +14,9 @@ import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart
 import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_private_app/logic/auth/auth_state.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/customer_waste_types_panel.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/household_collect_sheet.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/locationservices.dart';
 import 'package:iwms_private_app/modules/module3_operator/utils/assignment_status_store.dart';
-import 'package:iwms_private_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
 
 class OperatorQRScanner extends StatefulWidget {
   const OperatorQRScanner({
@@ -507,160 +506,60 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
   }) async {
     if (!mounted) return;
 
-    final action = await showModalBottomSheet<String>(
+    // Set by the drawer's bottom "Collect later" / "Not available" buttons. The
+    // drawer resolves to a bool (did a collection finalize?), so the chosen
+    // exception is captured here rather than squeezed into that return value.
+    String? action;
+
+    // One drawer: customer identity, the colour-coded waste list, and the two
+    // exception options at the bottom. No separate "Confirm customer" step —
+    // the driver scans and is immediately looking at the streams to weigh.
+    final collected = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
       backgroundColor: CaptainTheme.surface,
-      // Not fixed-height — the waste-type panel adds a row per stream — so the
-      // sheet must be free to grow past the default half-screen and scroll
-      // instead of overflowing its box.
       isScrollControlled: true,
+      // The keyboard opens over this for weight entry and the list grows as a
+      // card expands, so it needs a tall cap plus room to scroll.
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.92,
       ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) {
-        return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            12,
-            20,
-            24 + MediaQuery.viewPaddingOf(sheetContext).bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Confirm customer',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: CaptainTheme.strongText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "ID: $customerId",
-                style: TextStyle(color: CaptainTheme.mutedText),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                customerName,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: CaptainTheme.strongText,
-                ),
-              ),
-              const SizedBox(height: 14),
-              // What this household is registered to hand over. The customer's
-              // phone number is deliberately NOT shown here (or anywhere else
-              // in the driver app) — contactNo is still threaded through as
-              // data for OperatorDataScreen's offline sync record, just never
-              // rendered.
-              CustomerWasteTypesPanel(customerId: customerId),
-              const SizedBox(height: 16),
-
-              /// BUTTONS
-              Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () {
-                          Navigator.of(sheetContext).pop('collect');
-                        },
-                        child: Ink(
-                          decoration: BoxDecoration(
-                            gradient: CaptainTheme.accentGradient,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.check_circle_outline,
-                                  color: Colors.white),
-                              SizedBox(width: 8),
-                              Text(
-                                'Collect',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: CaptainTheme.strongText,
-                        side: BorderSide(color: CaptainTheme.hairline),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop('not_available');
-                      },
-                      child: const Text("Not available"),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: CaptainTheme.strongText,
-                        side: BorderSide(color: CaptainTheme.hairline),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop('collect_later');
-                      },
-                      child: const Text("Collect later"),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (sheetContext) => HouseholdCollectSheet(
+        customerId: customerId,
+        customerName: customerName,
+        latitude: latitude,
+        longitude: longitude,
+        assignmentId: (assignmentId != null && assignmentId.trim().isNotEmpty)
+            ? assignmentId
+            : null,
+        onSecondaryAction: (chosen) {
+          action = chosen;
+          Navigator.of(sheetContext).pop(false);
+        },
+      ),
     );
+
+    if (collected == true) action = 'collect';
 
     if (!mounted) return;
     await _waitForModalTeardown();
     if (!mounted) return;
     switch (action) {
       case 'collect':
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => OperatorDataScreen(
-              customerId: customerId,
-              customerName: customerName,
-              contactNo: contactNo,
-              latitude: latitude,
-              longitude: longitude,
-              skipBluetoothInit: false,
-              assignmentId:
-                  (assignmentId != null && assignmentId.trim().isNotEmpty)
-                      ? assignmentId
-                      : null,
-            ),
-          ),
-        );
+        // The collection already happened inside the drawer above — record the
+        // local status and close the scanner.
+        if (assignmentId != null && assignmentId.trim().isNotEmpty) {
+          await AssignmentStatusStore.setStatusForAssignment(
+            assignmentId.trim(),
+            customerId,
+            'collected',
+          );
+        }
         if (!mounted) return;
+        AppFlash.success(context, 'Collection saved');
         Navigator.of(context).pop(widget.returnToAssignments ? true : null);
         break;
       case 'not_available':

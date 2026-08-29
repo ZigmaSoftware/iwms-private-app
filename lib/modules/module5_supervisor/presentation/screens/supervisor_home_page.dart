@@ -10,7 +10,6 @@ import 'package:iwms_private_app/data/repositories/staff_notification_repository
 import 'package:iwms_private_app/data/repositories/trip_retrip_repository.dart';
 import 'package:iwms_private_app/data/repositories/vehicle_breakdown_repository.dart';
 import 'package:iwms_private_app/modules/module1_citizen/citizen/map.dart';
-import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_grievance_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_history_screen.dart';
@@ -21,6 +20,7 @@ import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_breakdowns_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_retrip_requests_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_collection_points_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_households_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_grievance_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
@@ -39,7 +39,6 @@ class SupervisorHomePage extends StatefulWidget {
     required this.onLogout,
     this.empId,
     this.onOpenTrips,
-    this.onOpenAssignments,
     this.onOpenTeam,
   });
 
@@ -47,7 +46,6 @@ class SupervisorHomePage extends StatefulWidget {
   final String? empId;
   final VoidCallback onLogout;
   final VoidCallback? onOpenTrips;
-  final VoidCallback? onOpenAssignments;
   final VoidCallback? onOpenTeam;
 
   @override
@@ -62,6 +60,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
       SupervisorGrievanceRepository();
   int _grievanceCount = 0;
   int _collectionPointCount = 0;
+  int _householdCount = 0;
   int _pendingBreakdownCount = 0;
   int _pendingRetripCount = 0;
   int _unreadNotificationCount = 0;
@@ -128,9 +127,11 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
     try {
       final repo = SupervisorRepository();
       final collectionPoints = await repo.fetchCollectionPoints();
+      final households = await repo.fetchHouseholds();
       if (!mounted) return;
       setState(() {
         _collectionPointCount = collectionPoints.length;
+        _householdCount = households.length;
       });
     } catch (_) {}
   }
@@ -139,7 +140,6 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
   Widget build(BuildContext context) {
     return BlocBuilder<SupervisorBloc, SupervisorState>(
       builder: (context, state) {
-        final kpis = state.kpis;
         return Container(
           color: SupervisorTheme.background,
           child: Column(
@@ -160,7 +160,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                 // dots show through them via normal compositing — no need to put
                 // the pattern inside the viewport.
                 child: SupervisorPatternBackground(
-                  child: _buildBody(context, state, kpis),
+                  child: _buildBody(context, state),
                 ),
               ),
             ],
@@ -173,7 +173,6 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
   Widget _buildBody(
     BuildContext context,
     SupervisorState state,
-    SupervisorKpis kpis,
   ) {
     if (state.status == SupervisorStatus.loading ||
         state.status == SupervisorStatus.initial) {
@@ -218,50 +217,6 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
               _quickActionFilters(),
               const SizedBox(height: 12),
               _quickActions(context),
-              const SizedBox(height: 20),
-              const Text(
-                'Today at a glance',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: SupervisorTheme.strongText,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _glanceGrid(kpis),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Text(
-                    'Activity & alerts',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: SupervisorTheme.strongText,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (widget.onOpenAssignments != null)
-                    TextButton(
-                      onPressed: widget.onOpenAssignments,
-                      child: const Text('Review',
-                          style: TextStyle(
-                            color: SupervisorTheme.accent,
-                            fontWeight: FontWeight.w700,
-                          )),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (state.alerts.isEmpty)
-                _allClearTile()
-              else
-                ...state.alerts.map(
-                  (a) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: SupervisorAlertTile(alert: a),
-                  ),
-                ),
             ],
           ),
         ),
@@ -339,6 +294,25 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
                 builder: (_) => BlocProvider<SupervisorBloc>.value(
                   value: bloc,
                   child: const SupervisorCollectionPointsScreen(),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/house.png',
+          label: 'Households',
+          badgeLabel: '$_householdCount',
+          onTap: () {
+            final bloc = context.read<SupervisorBloc>();
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => BlocProvider<SupervisorBloc>.value(
+                  value: bloc,
+                  child: const SupervisorHouseholdsScreen(),
                 ),
               ),
             );
@@ -520,99 +494,6 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
     );
   }
 
-  /// "Today at a glance" grid (2×2) of solid-white illustrated stat cards.
-  /// The first two carry artwork; the last two stay image-less until their
-  /// illustrations are supplied.
-  Widget _glanceGrid(SupervisorKpis kpis) {
-    final cards = <SupervisorGlanceCard>[
-      SupervisorGlanceCard(
-        value: '${kpis.total}',
-        label: 'Trips today',
-        icon: Icons.route_rounded,
-        color: SupervisorTheme.info,
-        imageAsset: 'assets/images/trips_today.png',
-        onTap: widget.onOpenTrips,
-      ),
-      SupervisorGlanceCard(
-        value: '${kpis.inProgress}',
-        label: 'In progress',
-        icon: Icons.directions_run_rounded,
-        color: const Color(0xFF0EA5E9),
-        imageAsset: 'assets/images/in_progress.png',
-        onTap: widget.onOpenTrips,
-      ),
-      SupervisorGlanceCard(
-        value: '${kpis.completed}',
-        label: 'Completed',
-        icon: Icons.check_circle_rounded,
-        color: SupervisorTheme.success,
-        imageAsset: 'assets/images/completed_trip.png',
-        onTap: widget.onOpenTrips,
-      ),
-      SupervisorGlanceCard(
-        value: '${kpis.pendingReview}',
-        label: 'Pending review',
-        icon: Icons.hourglass_bottom_rounded,
-        color: SupervisorTheme.warning,
-        imageAsset: 'assets/images/pending_trip.png',
-        onTap: widget.onOpenAssignments,
-      ),
-    ];
-
-    const spacing = 12.0;
-    const height = 116.0;
-
-    Widget cell(Widget card) =>
-        Expanded(child: SizedBox(height: height, child: card));
-
-    Widget row(Widget a, Widget b) => Row(
-          children: [
-            cell(a),
-            const SizedBox(width: spacing),
-            cell(b),
-          ],
-        );
-
-    return Column(
-      children: [
-        row(cards[0], cards[1]),
-        const SizedBox(height: spacing),
-        row(cards[2], cards[3]),
-      ],
-    );
-  }
-
-  Widget _allClearTile() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: SupervisorTheme.accentSoft,
-        borderRadius: SupervisorTheme.cardRadius,
-        border:
-            Border.all(color: SupervisorTheme.accent.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.task_alt_rounded,
-            color: SupervisorTheme.accent,
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'All clear — no pending alerts in your zones.',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: SupervisorTheme.accentDeep,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _QuickActionSpec {

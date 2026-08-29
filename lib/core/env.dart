@@ -55,4 +55,13 @@ const String kOperatorProfileBaseUrl = String.fromEnvironment(
   defaultValue: _defaultPrivateBackendOrigin,
 );
 
+// MapTiler powers the Light/Dark basemap styles (see core/map/map_style.dart)
+// — CARTO retired free anonymous tile access and Esri's key-less Canvas
+// tiles have coverage gaps in India, so this is the real fix, not a
+// fallback. Free-tier key from https://cloud.maptiler.com/account/keys/.
+const String kMapTilerApiKey = String.fromEnvironment(
+  'VITE_MAPTILER_API_KEY',
+  defaultValue: 'UqY8ZGGSQrQPGUjvuBOc',
+);
+
 

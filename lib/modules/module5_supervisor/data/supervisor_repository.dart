@@ -31,6 +31,8 @@ class SupervisorRepository {
       '${ApiConfig.desktopBase}schedule-operations/daily-trip-logs/';
   static const String _binCollectionEvents =
       '${ApiConfig.desktopBase}schedule-operations/bin-collection-events/';
+  static const String _householdWasteCollections =
+      '${ApiConfig.desktopBase}schedule-operations/wastecollections/';
   static const String _attendanceRecords =
       '${ApiConfig.attendanceBase}records/';
   static const String _collectionPoints =
@@ -151,24 +153,44 @@ class SupervisorRepository {
 
   /// The full per-event detail behind [fetchWasteSeries] — vehicle,
   /// collection point, and status per collected bin — for the waste-summary
-  /// cards' tap-through "which vehicle collected this" view. Same endpoint,
-  /// same scope; kept as a separate method so a caller that only needs the
-  /// chart totals isn't forced to carry the extra per-event fields around.
+  /// cards' tap-through "which vehicle collected this" view. Combines BOTH
+  /// bin-collection events and household waste collections, scoped to this
+  /// supervisor's own trip plans either way (`mine=true` on each call).
+  ///
+  /// Household collections used to be entirely missing here — `BinCollectionEvent`
+  /// only exists for bin scans, so a supervisor whose drivers were doing
+  /// household rounds (see household_collect_sheet.dart) saw a Total/Wet/Dry
+  /// summary that never moved, however much was actually collected. A
+  /// household `WasteCollection` row holds all four waste-type weights on one
+  /// record rather than one type per row, so it's fanned out into up to 4
+  /// synthetic events (see `SupervisorWasteEvent.fromHouseholdCollectionJson`)
+  /// to match the per-type shape the summary cards expect.
   Future<List<SupervisorWasteEvent>> fetchWasteEvents() async {
     try {
       final dio = await authorizedDio();
-      final res = await dio.get(
-        _binCollectionEvents,
-        queryParameters: {
-          'mine': 'true',
-          'status': 'Collected',
-          'limit': '5000',
-        },
-      );
-      return _rawList(res.data)
+      final results = await Future.wait([
+        dio.get(
+          _binCollectionEvents,
+          queryParameters: {
+            'mine': 'true',
+            'status': 'Collected',
+            'limit': '5000',
+          },
+        ),
+        dio.get(
+          _householdWasteCollections,
+          queryParameters: {'mine': 'true', 'limit': '5000'},
+        ),
+      ]);
+
+      final binEvents = _rawList(results[0].data)
           .map((e) => SupervisorWasteEvent.fromJson(e))
-          .where((p) => p.hasValidDate)
-          .toList();
+          .where((p) => p.hasValidDate);
+      final householdEvents = _rawList(results[1].data)
+          .expand((e) => SupervisorWasteEvent.fromHouseholdCollectionJson(e))
+          .where((p) => p.hasValidDate);
+
+      return [...binEvents, ...householdEvents];
     } on DioException catch (e) {
       throw SupervisorException(_message(e));
     } catch (e) {

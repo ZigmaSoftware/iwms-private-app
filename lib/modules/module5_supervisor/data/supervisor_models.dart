@@ -653,6 +653,46 @@ class SupervisorWasteEvent {
       status: _str(j['status']),
     );
   }
+
+  /// One `WasteCollection` (household) row into up to 4 synthetic events —
+  /// one per non-zero waste-type bucket (`wet_waste`/`dry_waste`/
+  /// `mixed_waste`/`sanitary_waste`). Unlike `BinCollectionEvent`, a
+  /// household row carries all four weights on one record rather than one
+  /// waste type per row, so it can't map 1:1 onto [SupervisorWasteEvent] —
+  /// this fans it out to match the shape the waste-summary cards expect.
+  ///
+  /// There's no collection-point/vehicle on a household stop, and status is
+  /// always effectively "Collected" (a WasteCollection row only exists once
+  /// collected — Not Available/Collect Later never create one, see
+  /// DailyTripHouseholdCollection.mark_status).
+  static List<SupervisorWasteEvent> fromHouseholdCollectionJson(
+    Map<String, dynamic> j,
+  ) {
+    final date = DateTime.tryParse(_str(j['collection_date'])) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final tripAssignmentId = _str(j['trip_assignment_id']);
+    final customerName = _str(j['customer_name']);
+
+    final buckets = <String, double>{
+      'Wet Waste': _numKg(j['wet_waste']),
+      'Dry Waste': _numKg(j['dry_waste']),
+      'Mixed Waste': _numKg(j['mixed_waste']),
+      'Sanitary Waste': _numKg(j['sanitary_waste']),
+    };
+
+    return [
+      for (final entry in buckets.entries)
+        if (entry.value > 0)
+          SupervisorWasteEvent(
+            date: date,
+            weightKg: entry.value,
+            wasteTypeName: entry.key,
+            collectionPointName: customerName.isEmpty ? null : customerName,
+            tripAssignmentId: tripAssignmentId,
+            status: 'Collected',
+          ),
+    ];
+  }
 }
 
 /// A staff member (from `user-creations/staffcreation/`), used by the Staffs
@@ -680,6 +720,17 @@ class SupervisorStaff {
   final String mobile;
   final String attendanceStatus;
 
+  /// Heading this staff member is listed under in the Staffs screen.
+  ///
+  /// Role first ("Company Driver", "Company Supervisor") because it is always
+  /// populated, then designation as a fallback for records that carry one but
+  /// no role. Only when both are blank does the row land in "Unspecified".
+  String get groupLabel {
+    if (role.trim().isNotEmpty) return role.trim();
+    if (designation.trim().isNotEmpty) return designation.trim();
+    return 'Unspecified';
+  }
+
   factory SupervisorStaff.fromJson(Map<String, dynamic> j) {
     final name = _str(j['employee_name']).isNotEmpty
         ? _str(j['employee_name'])
@@ -688,7 +739,7 @@ class SupervisorStaff {
       _str(j['designation_name']),
       _str(j['designation_group']),
       _str(j['designation']),
-    ].firstWhere((v) => v.isNotEmpty, orElse: () => 'Unspecified');
+    ].firstWhere((v) => v.isNotEmpty, orElse: () => '');
     return SupervisorStaff(
       uniqueId: _str(j['unique_id']).isNotEmpty
           ? _str(j['unique_id'])

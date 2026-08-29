@@ -29,6 +29,10 @@ class _SupervisorWasteSummaryCardsState
   DateTime _anchorDate = DateTime.now();
   DateTimeRange? _customRange;
 
+  /// "Others" is collapsed by default: Wet and Dry are the two streams a
+  /// supervisor reads at a glance, and everything else is long-tail detail.
+  bool _othersExpanded = false;
+
   static const double _placeholderTargetKg = 10000;
 
   @override
@@ -144,7 +148,12 @@ class _SupervisorWasteSummaryCardsState
     }).toList();
   }
 
+  /// kg below 1000, tonnes (2dp) at/above — so a normal day/week's real
+  /// weight reads as a legible whole-ish kg number instead of "0.32 t".
   String _fmt(double kg) {
+    if (kg < 1000) {
+      return '${kg.toStringAsFixed(kg == kg.roundToDouble() ? 0 : 1)} kg';
+    }
     final tonnes = kg / 1000;
     return '${tonnes.toStringAsFixed(2)} t';
   }
@@ -211,6 +220,25 @@ class _SupervisorWasteSummaryCardsState
         .where((e) => e.isDry)
         .fold<double>(0, (sum, e) => sum + e.weightKg);
 
+    // Every stream that is neither Wet nor Dry — Mixed, Sanitary, E-Waste,
+    // whatever the project has configured. These are summed into the total
+    // but had no card of their own, so their weight was invisible. Rather
+    // than adding a third/fourth fixed card (which breaks the 2-up grid as
+    // soon as a project adds another type), they collapse into one
+    // expandable "Others" row that scales to any number of streams.
+    final otherEvents =
+        events.where((e) => !e.isWet && !e.isDry).toList(growable: false);
+
+    final otherTotals = <String, double>{};
+    for (final e in otherEvents) {
+      final label =
+          e.wasteTypeName.trim().isEmpty ? 'Unspecified' : e.wasteTypeName.trim();
+      otherTotals[label] = (otherTotals[label] ?? 0) + e.weightKg;
+    }
+    final otherRows = otherTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final othersKg = otherTotals.values.fold<double>(0, (sum, v) => sum + v);
+
     final wetPct = totalKg > 0 ? wetKg / totalKg : 0.0;
 
     final dryPct = totalKg > 0 ? dryKg / totalKg : 0.0;
@@ -250,11 +278,16 @@ class _SupervisorWasteSummaryCardsState
                   pct: wetPct,
                   iconAsset: 'assets/icons/bin.png',
                   backgroundAsset: 'assets/cards/bin_card.png',
-                  valueColor: const Color(0xFF7C3AED),
+                  // Was purple (0xFF7C3AED) — unrelated to this card's own
+                  // mint/teal-green artwork (bin_card.png). Deep teal instead,
+                  // pulled from that same background's hue family so the
+                  // label reads as part of the card rather than a clashing
+                  // accent color.
+                  valueColor: const Color(0xFF0F7A5C),
                   onTap: () => showSupervisorWasteVehicleSheet(
                     context,
                     title: 'Wet Waste collections',
-                    accentColor: const Color(0xFF7C3AED),
+                    accentColor: const Color(0xFF0F7A5C),
                     events: events,
                     matches: (e) => e.isWet,
                   ),
@@ -268,11 +301,16 @@ class _SupervisorWasteSummaryCardsState
                   pct: dryPct,
                   iconAsset: 'assets/icons/household.png',
                   backgroundAsset: 'assets/cards/household_card.png',
-                  valueColor: const Color(0xFFF97316),
+                  // Was orange (0xFFF97316), then blue — reverted to this
+                  // card's own peach/amber hue family (household_card.png)
+                  // per request, but deeper/more saturated than the original
+                  // orange so it actually contrasts against the pale peach
+                  // background instead of blending into it.
+                  valueColor: const Color(0xFFB45309),
                   onTap: () => showSupervisorWasteVehicleSheet(
                     context,
                     title: 'Dry Waste collections',
-                    accentColor: const Color(0xFFF97316),
+                    accentColor: const Color(0xFFB45309),
                     events: events,
                     matches: (e) => e.isDry,
                   ),
@@ -280,8 +318,210 @@ class _SupervisorWasteSummaryCardsState
               ),
             ],
           ),
+          if (otherRows.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _othersSection(
+              rows: otherRows,
+              othersKg: othersKg,
+              totalKg: totalKg,
+              events: events,
+            ),
+          ],
         ],
       ],
+    );
+  }
+
+  /// Collapsible summary of every non-Wet/Dry stream.
+  ///
+  /// Header always shows the combined weight so the number is visible without
+  /// expanding; tapping reveals one row per waste type, each of which opens
+  /// the same vehicle sheet the Wet/Dry cards use.
+  Widget _othersSection({
+    required List<MapEntry<String, double>> rows,
+    required double othersKg,
+    required double totalKg,
+    required List<SupervisorWasteEvent> events,
+  }) {
+    const accent = Color(0xFF5B6472);
+    final pct = totalKg > 0 ? othersKg / totalKg : 0.0;
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: SupervisorTheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: SupervisorTheme.hairline.withValues(alpha: 0.5),
+        ),
+        boxShadow: SupervisorTheme.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _othersExpanded = !_othersExpanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.category_rounded,
+                      size: 18,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Others (${rows.length})',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1,
+                            fontWeight: FontWeight.w800,
+                            color: accent,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${_fmt(othersKg)}  ·  ${(pct * 100).round()}% of total',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            height: 1,
+                            fontWeight: FontWeight.w600,
+                            color: SupervisorTheme.mutedText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _othersExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: SupervisorTheme.mutedText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState: _othersExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Column(
+              children: [
+                for (final row in rows)
+                  _otherRow(
+                    label: row.key,
+                    valueKg: row.value,
+                    totalKg: totalKg,
+                    accent: accent,
+                    events: events,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _otherRow({
+    required String label,
+    required double valueKg,
+    required double totalKg,
+    required Color accent,
+    required List<SupervisorWasteEvent> events,
+  }) {
+    final pct = totalKg > 0 ? valueKg / totalKg : 0.0;
+    final key = label.toLowerCase();
+
+    return InkWell(
+      onTap: () => showSupervisorWasteVehicleSheet(
+        context,
+        title: '$label collections',
+        accentColor: accent,
+        events: events,
+        matches: (e) {
+          if (e.isWet || e.isDry) return false;
+          final name = e.wasteTypeName.trim();
+          return (name.isEmpty ? 'unspecified' : name.toLowerCase()) == key;
+        },
+      ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: Color(0x11000000)),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.55),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: SupervisorTheme.strongText,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _fmt(valueKg),
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.2,
+                color: SupervisorTheme.strongText,
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 42,
+              child: Text(
+                '${(pct * 100).round()}%',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: SupervisorTheme.mutedText,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

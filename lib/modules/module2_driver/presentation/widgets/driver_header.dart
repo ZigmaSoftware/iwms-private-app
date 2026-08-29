@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/env.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/state/collection_mode_store.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_private_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 
@@ -30,6 +31,9 @@ class DriverHeader extends StatefulWidget {
     this.onNotificationsTap,
     this.unreadNotificationCount = 0,
     this.collapsed = false,
+    this.showCollectionModeToggle = true,
+    required this.collectionMode,
+    required this.onCollectionModeChanged,
   });
 
   final String name;
@@ -55,6 +59,15 @@ class DriverHeader extends StatefulWidget {
   /// When true the header renders as a slim tucked bar (used on the Map tab
   /// to maximise map visibility).
   final bool collapsed;
+
+  /// The driver's current Household/Bin collection mode, and the callback
+  /// fired when they tap the other segment.
+  final CollectionMode collectionMode;
+  final ValueChanged<CollectionMode> onCollectionModeChanged;
+
+  /// Whether to render the mode toggle at all — hidden on tabs where it
+  /// isn't relevant (Attendance/Profile).
+  final bool showCollectionModeToggle;
 
   @override
   State<DriverHeader> createState() => _DriverHeaderState();
@@ -178,9 +191,46 @@ class _DriverHeaderState extends State<DriverHeader> {
                   _logoutButton(compact: widget.collapsed),
                 ],
               ),
+              if (widget.showCollectionModeToggle) ...[
+                const SizedBox(height: 12),
+                _buildCollectionModeToggle(),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCollectionModeToggle() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ModeSegment(
+              label: 'Household',
+              icon: Icons.home_work_rounded,
+              selected: widget.collectionMode == CollectionMode.household,
+              onTap: () =>
+                  widget.onCollectionModeChanged(CollectionMode.household),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _ModeSegment(
+              label: 'Bin collection',
+              icon: Icons.delete_outline_rounded,
+              selected: widget.collectionMode == CollectionMode.bin,
+              onTap: () => widget.onCollectionModeChanged(CollectionMode.bin),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -428,6 +478,72 @@ class _DriverHeaderState extends State<DriverHeader> {
                           ],
                         ))
                   : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeSegment extends StatelessWidget {
+  const _ModeSegment({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Colors.white : Colors.white.withValues(alpha: 0.02),
+      borderRadius: BorderRadius.circular(11),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(11),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: selected
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected
+                    ? CaptainTheme.primary
+                    : Colors.white.withValues(alpha: 0.9),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: selected
+                        ? CaptainTheme.primary
+                        : Colors.white.withValues(alpha: 0.94),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
