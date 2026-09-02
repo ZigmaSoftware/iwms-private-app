@@ -15,7 +15,9 @@ import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/bin
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/captain_glass.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/captain_nav_bar.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/collection_progress_meter.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/trip_completion_nudge.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/trip_lifecycle_control.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/waste_breakdown_window.dart';
 import 'package:iwms_private_app/shared/widgets/crew_avatar_stack.dart';
 
 /// Captain Home — the "today-first" dashboard of the merged driver app.
@@ -37,11 +39,20 @@ class CaptainHomeTab extends StatefulWidget {
     required this.onScan,
     this.onOpenTrips,
     this.driverName,
+    this.closedTripCount = 0,
   });
 
-  /// All of the driver's trips today. When more than one (e.g. a bin trip AND a
-  /// household trip) the header becomes a horizontally-swipeable carousel.
+  /// The driver's OPEN trips today — closed (Completed / Re-Trip-closed)
+  /// assignments are filtered out upstream by `DriverHomePage._tripsForMode`.
+  /// When more than one (e.g. a bin trip AND a household trip) the header
+  /// becomes a horizontally-swipeable carousel.
   final List<OperatorTripToday> trips;
+
+  /// How many of today's trips for the current mode are already closed. Only
+  /// used to word the empty state: with [trips] empty and this non-zero the
+  /// driver has FINISHED their day, which is a very different message from
+  /// "nothing has been assigned to you".
+  final int closedTripCount;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
@@ -77,9 +88,69 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
   double _carouselItemExtent = 0;
   bool _carouselSnapping = false;
 
+  // ── Paginated stops ──────────────────────────────────────────────────────
+  // The stops timeline is nested inside THIS page's own ListView rather than
+  // owning a scrollable of its own, so "the driver scrolled near the bottom"
+  // has to be detected here and forwarded down — hence the keys, rather than
+  // each timeline listening to a scroll controller of its own.
+  final GlobalKey<_StopsTimelineState> _binTimelineKey = GlobalKey();
+  final GlobalKey<_HouseholdTimelineState> _householdTimelineKey = GlobalKey();
+
+  /// True only for a genuine scroll delta (a drag, or its momentum) — NOT a
+  /// `ScrollUpdateNotification` this class fires on its own accord.
+  ///
+  /// This used to be a plain `ScrollController.addListener`, which Flutter
+  /// also invokes whenever the list's CONTENT grows and `maxScrollExtent`
+  /// gets recalculated — with no scrolling involved at all. On a short page
+  /// (20 tiles fit close to one screen), that meant the very first
+  /// `loadMore()` satisfied "near the bottom" at initial layout, appended 20
+  /// more items, immediately re-satisfied "near the bottom" again from THAT
+  /// growth, and cascaded through every remaining page before the driver
+  /// ever touched the screen — the opposite of paginated loading.
+  /// `ScrollUpdateNotification` specifically means "the position actually
+  /// moved"; a pure content-resize relayout fires `ScrollMetricsNotification`
+  /// instead, which this ignores by only matching on the more specific type.
+  bool _onPageScroll(ScrollUpdateNotification notification) {
+    final metrics = notification.metrics;
+    // Trigger a bit before the true bottom (300px) so the next page is
+    // usually already loaded by the time the driver actually reaches it,
+    // rather than them seeing the loading spinner land first.
+    if (metrics.pixels >= metrics.maxScrollExtent - 300) {
+      _binTimelineKey.currentState?.loadMore();
+      _householdTimelineKey.currentState?.loadMore();
+    }
+    return false; // Don't swallow it — RefreshIndicator etc. still need it.
+  }
+
+  // ── Trip-completion nudge ────────────────────────────────────────────────
+  // Whether each trip (by assignment id) was fully resolved the last time we
+  // looked — lets us fire the nudge exactly on the pending>0 -> pending==0
+  // transition, not on every rebuild (which would re-show it after every
+  // pull-to-refresh once a trip is done).
+  final Map<String, bool> _wasFullyResolved = {};
+  // Dismissed ("Not now") trips don't nag again on subsequent refreshes of
+  // the SAME resolution — but a fresh transition (e.g. a Re-Trip continuation
+  // that later finishes too) is a new id, so it isn't suppressed by this.
+  final Set<String> _nudgeDismissed = {};
+  // The one trip currently eligible for the nudge, or null. Only one at a
+  // time — a driver holding two trips that both finish back-to-back sees them
+  // one after another, not stacked.
+  String? _activeNudgeTripId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Also check on first build: a trip that was ALREADY fully resolved when
+    // this tab first mounts (e.g. the driver force-closed the app mid-trip
+    // and reopened it) still genuinely needs ending — don't wait for a NEW
+    // resolution to remind them.
+    _checkForNewlyResolvedTrip(widget.trips);
+  }
+
   @override
   void didUpdateWidget(covariant CaptainHomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _checkForNewlyResolvedTrip(widget.trips);
     if (widget.trips.isEmpty) return;
 
     // Re-locate the previously-selected trip by identity in the (possibly
@@ -117,6 +188,38 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
     super.dispose();
   }
 
+  /// Updates the "was this fully resolved last time we looked" tracker for
+  /// every trip currently on screen, and arms [_activeNudgeTripId] on the
+  /// pending>0 -> pending==0 transition.
+  ///
+  /// A trip's `isFullyResolved` state can also go from true -> false again —
+  /// a supervisor could re-open a stop, or a Re-Trip continuation replaces
+  /// this id entirely — so this always updates the tracker, not just on the
+  /// transition itself, keeping it accurate for the NEXT comparison.
+  void _checkForNewlyResolvedTrip(List<OperatorTripToday> trips) {
+    // The active nudge's trip disappeared from view (ended, or the app moved
+    // on to a continuation) — retire it so a different trip's resolution can
+    // still surface its own nudge.
+    if (_activeNudgeTripId != null &&
+        !trips.any((t) => t.assignmentUniqueId == _activeNudgeTripId)) {
+      _activeNudgeTripId = null;
+    }
+
+    for (final trip in trips) {
+      final id = trip.assignmentUniqueId;
+      final nowResolved = isFullyResolved(trip) && !trip.isClosed;
+      final wasResolved = _wasFullyResolved[id] ?? false;
+      _wasFullyResolved[id] = nowResolved;
+
+      if (nowResolved &&
+          !wasResolved &&
+          !_nudgeDismissed.contains(id) &&
+          _activeNudgeTripId == null) {
+        _activeNudgeTripId = id;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return CaptainBackground(
@@ -125,12 +228,22 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (widget.loading) {
+    // Only the FIRST load (no data yet) blocks on the full-page spinner/error
+    // view. `widget.loading`/`widget.error` also flip on every refresh AFTER
+    // this — including the one `onChanged` fires right after a bin scan or
+    // household collect — and swapping the whole body out each time tore
+    // down the stops ListView and rebuilt it from scratch, resetting scroll
+    // to the top. The driver then had to scroll back down to find where they
+    // left off after every single collection. `DriverHomePage` also never
+    // clears `trips` on a failed background refresh (see
+    // `_loadAssignmentsForDriver`'s catch block), so `trips.isEmpty` is a
+    // reliable "this really is the first load" signal, not just "loading".
+    if (widget.loading && widget.trips.isEmpty) {
       return Center(
         child: CircularProgressIndicator(color: CaptainTheme.accent),
       );
     }
-    if (widget.error != null) {
+    if (widget.error != null && widget.trips.isEmpty) {
       return _MessageView(
         icon: Icons.error_outline_rounded,
         iconColor: CaptainTheme.danger,
@@ -141,13 +254,22 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
       );
     }
     if (widget.trips.isEmpty) {
+      // Closed trips are filtered out before they reach here, so an empty list
+      // means one of two very different things — don't tell a driver who just
+      // finished every trip that nothing was ever assigned to them.
+      final allDone = widget.closedTripCount > 0;
       return _MessageView(
         imageAsset: 'assets/images/no_assignments.png',
-        title: 'No trip today',
-        message:
-            'No trip has been assigned to this vehicle yet. Pull to refresh or check with your supervisor.',
-        actionLabel: 'Refresh',
-        onAction: widget.onRefresh,
+        title: allDone ? 'All trips completed' : 'No trip today',
+        message: allDone
+            ? 'You have finished every trip assigned to you today. '
+                'Completed trips are in Trip History.'
+            : 'No trip has been assigned to this vehicle yet. Pull to refresh or check with your supervisor.',
+        actionLabel: allDone ? 'View history' : 'Refresh',
+        onAction: allDone && widget.onOpenTrips != null
+            // onAction is async; onOpenTrips is a plain VoidCallback.
+            ? () async => widget.onOpenTrips!()
+            : widget.onRefresh,
       );
     }
 
@@ -170,93 +292,116 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
 
     final bottomSafeArea = MediaQuery.viewPaddingOf(context).bottom;
 
-    return RefreshIndicator(
-      color: CaptainTheme.accent,
-      onRefresh: widget.onRefresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        // DriverHomePage already owns the header and overlays the bottom
-        // navigation/FAB. A 16 px page grid matches its map/profile sections.
-        padding: EdgeInsets.fromLTRB(
-          16,
-          12,
-          16,
-          kCaptainHomeBottomClearance + bottomSafeArea,
-        ),
-        children: [
-          if (multi)
-            _buildTripCarousel(
-              trips: trips,
-              selected: selected,
-              blockers: blockers,
-            )
-          else
-            _TripHeroCard(
-              trip: t,
-              onOpenMap: () => widget.onOpenMap(t),
-            ),
-          const SizedBox(height: 12),
-          if (!locked && !t.isFinished) ...[
-            TripLifecycleControl(
-              trip: t,
-              locked: locked,
-              onChanged: widget.onRefresh,
-            ),
-            const SizedBox(height: 12),
-          ],
-          _QuickActionsRow(
-            onOpenMap: () => widget.onOpenMap(t),
-            // Scanning a locked trip's bin is rejected by the backend
-            // (TRIP_LOCKED); scanning before Start is rejected with
-            // TRIP_NOT_STARTED — the friendlier client-side lead-in to that
-            // is `showStartRequiredSheet`, shown instead of dimming the icon
-            // away entirely.
-            onScan: locked
-                ? null
-                : (!t.isFinished && !t.isStarted
-                    ? () => showStartRequiredSheet(context)
-                    : widget.onScan),
-            scanDimmed: !locked && !t.isFinished && !t.isStarted,
-            onHistory: widget.onOpenTrips ??
-                () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const OperatorTripHistoryScreen(),
-                      ),
-                    ),
+    return NotificationListener<ScrollUpdateNotification>(
+      onNotification: _onPageScroll,
+      child: RefreshIndicator(
+        color: CaptainTheme.accent,
+        onRefresh: widget.onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          // DriverHomePage already owns the header and overlays the bottom
+          // navigation/FAB. A 16 px page grid matches its map/profile sections.
+          padding: EdgeInsets.fromLTRB(
+            16,
+            12,
+            16,
+            kCaptainHomeBottomClearance + bottomSafeArea,
           ),
-          const SizedBox(height: 16),
-          if (locked) ...[
-            _LockedTripBanner(blocker: blocker),
+          children: [
+            if (multi)
+              _buildTripCarousel(
+                trips: trips,
+                selected: selected,
+                blockers: blockers,
+              )
+            else
+              _TripHeroCard(
+                trip: t,
+                onOpenMap: () => widget.onOpenMap(t),
+              ),
+            const SizedBox(height: 12),
+            // Shown once, right when this trip's stops all become resolved —
+            // see _checkForNewlyResolvedTrip. Sits above the Start/End control
+            // so it's the first thing the driver sees, but tapping "End Trip"
+            // here runs the exact same confirmAndEndTrip flow as that control.
+            if (!locked && t.assignmentUniqueId == _activeNudgeTripId) ...[
+              TripCompletionNudge(
+                trip: t,
+                onChanged: widget.onRefresh,
+                onDismiss: () => setState(() {
+                  _nudgeDismissed.add(t.assignmentUniqueId);
+                  _activeNudgeTripId = null;
+                }),
+              ),
+            ],
+            // isClosed (status == Completed), not isFinished/progress.completed
+            // — a fully-resolved-but-not-yet-ended trip must keep this control
+            // available even after the nudge above is dismissed, or ending it
+            // becomes impossible. See TripLifecycleControl's own build() note.
+            if (!locked && !t.isClosed) ...[
+              TripLifecycleControl(
+                trip: t,
+                locked: locked,
+                onChanged: widget.onRefresh,
+              ),
+              const SizedBox(height: 12),
+            ],
+            _QuickActionsRow(
+              onOpenMap: () => widget.onOpenMap(t),
+              // Scanning a locked trip's bin is rejected by the backend
+              // (TRIP_LOCKED); scanning before Start is rejected with
+              // TRIP_NOT_STARTED — the friendlier client-side lead-in to that
+              // is `showStartRequiredSheet`, shown instead of dimming the icon
+              // away entirely.
+              onScan: locked
+                  ? null
+                  : (!t.isFinished && !t.isStarted
+                      ? () => showStartRequiredSheet(context)
+                      : widget.onScan),
+              scanDimmed: !locked && !t.isFinished && !t.isStarted,
+              onHistory: widget.onOpenTrips ??
+                  () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const OperatorTripHistoryScreen(),
+                        ),
+                      ),
+            ),
             const SizedBox(height: 16),
+            if (locked) ...[
+              _LockedTripBanner(blocker: blocker),
+              const SizedBox(height: 16),
+            ],
+            // Household / bulk trips collect customers directly (no bins), so
+            // show the household list instead of the bin route + collection points.
+            if (t.isHousehold) ...[
+              _SectionTitle(
+                title: 'Households',
+                trailing: '${t.progress.resolved}/${t.progress.total} done',
+              ),
+              const SizedBox(height: 10),
+              _HouseholdTimeline(
+                key: _householdTimelineKey,
+                trip: t,
+                onChanged: widget.onRefresh,
+                locked: stopsInert,
+              ),
+            ] else ...[
+              CollectionProgressMeter(collectionPoints: t.collectionPoints),
+              const SizedBox(height: 16),
+              _SectionTitle(
+                title: 'Collection points',
+                trailing: '${t.progress.resolved}/${t.progress.total} done',
+              ),
+              const SizedBox(height: 10),
+              _StopsTimeline(
+                key: _binTimelineKey,
+                trip: t,
+                onChanged: widget.onRefresh,
+                locked: stopsInert,
+              ),
+            ],
           ],
-          // Household / bulk trips collect customers directly (no bins), so
-          // show the household list instead of the bin route + collection points.
-          if (t.isHousehold) ...[
-            _SectionTitle(
-              title: 'Households',
-              trailing: '${t.progress.resolved}/${t.progress.total} done',
-            ),
-            const SizedBox(height: 10),
-            _HouseholdTimeline(
-              trip: t,
-              onChanged: widget.onRefresh,
-              locked: stopsInert,
-            ),
-          ] else ...[
-            CollectionProgressMeter(collectionPoints: t.collectionPoints),
-            const SizedBox(height: 16),
-            _SectionTitle(
-              title: 'Collection points',
-              trailing: '${t.progress.resolved}/${t.progress.total} done',
-            ),
-            const SizedBox(height: 10),
-            _StopsTimeline(
-              trip: t,
-              onChanged: widget.onRefresh,
-              locked: stopsInert,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -770,6 +915,42 @@ class _LockedContent extends StatelessWidget {
   }
 }
 
+/// Sits at the bottom of a paginated stops list while more pages remain.
+/// Purely visual — [_StopsTimelineState]/[_HouseholdTimelineState]'s
+/// `loadMore()` is triggered by the OUTER page scroll listener, not by this
+/// widget becoming visible; it just reflects whether that's in flight.
+class _LoadMoreIndicator extends StatelessWidget {
+  const _LoadMoreIndicator({required this.loading});
+
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: loading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: CaptainTheme.accent,
+                ),
+              )
+            : Text(
+                'Scroll for more',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: CaptainTheme.mutedText,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 /// The padlock badge floated over a locked trip card.
 class _LockChip extends StatelessWidget {
   const _LockChip({required this.blocker});
@@ -1097,13 +1278,14 @@ class _TripHeroCard extends StatelessWidget {
                                 // than the generic recycling glyph.
                                 // Household/bulk trips keep the generic icon
                                 // (icon stays as the fallback).
-                                iconAsset: trip.collectionType == 'bin_collection'
-                                    ? (trip.wasteType.isWet
-                                        ? 'assets/icons/bin.png'
-                                        : trip.wasteType.isDry
-                                            ? 'assets/icons/household.png'
-                                            : null)
-                                    : null,
+                                iconAsset:
+                                    trip.collectionType == 'bin_collection'
+                                        ? (trip.wasteType.isWet
+                                            ? 'assets/icons/bin.png'
+                                            : trip.wasteType.isDry
+                                                ? 'assets/icons/household.png'
+                                                : null)
+                                        : null,
                                 text: trip.wasteType.name,
                                 maxTextWidth: veryNarrow ? 92 : 128,
                               ),
@@ -1387,8 +1569,15 @@ class _QuickActionsRow extends StatelessWidget {
 // Stops timeline
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _StopsTimeline extends StatelessWidget {
+/// Bin stops, paginated: `trip.collectionPoints` only ever holds the FIRST
+/// page (20 — see `STOPS_PAGE_SIZE` on the backend), so this widget owns
+/// fetching and accumulating the rest as the driver scrolls, via
+/// `loadMore()` — called by `_CaptainHomeTabState`'s scroll listener on the
+/// OUTER page ListView, since this timeline is nested inside that scrollable
+/// rather than owning its own.
+class _StopsTimeline extends StatefulWidget {
   const _StopsTimeline({
+    super.key,
     required this.trip,
     required this.onChanged,
     this.locked = false,
@@ -1402,13 +1591,81 @@ class _StopsTimeline extends StatelessWidget {
   final bool locked;
 
   @override
+  State<_StopsTimeline> createState() => _StopsTimelineState();
+}
+
+class _StopsTimelineState extends State<_StopsTimeline> {
+  /// Stops fetched beyond the embedded first page. Kept separate from
+  /// `trip.collectionPoints` (rather than merged into one list up front) so a
+  /// refresh that re-embeds an UPDATED first page (e.g. the stop just
+  /// scanned) never has to be reconciled against this list — see
+  /// `didUpdateWidget`.
+  final List<OperatorTripCollectionPoint> _extra = [];
+  bool _hasMore = false;
+  bool _loadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasMore = widget.trip.progress.total > widget.trip.collectionPoints.length;
+  }
+
+  @override
+  void didUpdateWidget(covariant _StopsTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trip.assignmentUniqueId != widget.trip.assignmentUniqueId) {
+      // A genuinely different trip (carousel swipe, or a Re-Trip continuation
+      // replacing this one) — start over.
+      _extra.clear();
+      _hasMore =
+          widget.trip.progress.total > widget.trip.collectionPoints.length;
+      return;
+    }
+    // Same trip refreshed (e.g. after a scan): the embedded first page may
+    // have changed (the scanned stop's status), but `_extra` is untouched —
+    // it holds pages the embedded response never re-sends. Only recompute
+    // `_hasMore` if it would otherwise go stale (e.g. the very last stop on
+    // the last page just got collected, so nothing to load turns into
+    // "everything's already loaded" either way — recomputing here just keeps
+    // the loader from spinning forever on a trip that shrank).
+    final loaded = widget.trip.collectionPoints.length + _extra.length;
+    if (loaded >= widget.trip.progress.total) _hasMore = false;
+  }
+
+  /// Fetches the next page and appends it. Safe to call repeatedly — a
+  /// concurrent call while one is already in flight is a no-op, and calling
+  /// once everything is loaded is a no-op too.
+  Future<void> loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      // Pages already embedded/loaded so far, +1 for the next one: the
+      // embedded response IS page 1, so `_extra` holding N items means pages
+      // 2..(N/20 + 1) are already in hand.
+      final nextPage = (_extra.length ~/ 20) + 2;
+      final page = await GetIt.instance<OperatorTripRepository>()
+          .fetchCollectionPointsPage(widget.trip.assignmentUniqueId, nextPage);
+      if (!mounted) return;
+      setState(() {
+        _extra.addAll(page.items);
+        _hasMore = page.hasNext;
+      });
+    } catch (_) {
+      // Best-effort: leave _hasMore as-is so the next scroll tick retries
+      // rather than surfacing a toast for a background prefetch.
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final timeline = _buildTimeline(context);
-    return locked ? _LockedContent(child: timeline) : timeline;
+    return widget.locked ? _LockedContent(child: timeline) : timeline;
   }
 
   Widget _buildTimeline(BuildContext context) {
-    final stops = [...trip.collectionPoints]
+    final stops = [...widget.trip.collectionPoints, ..._extra]
       ..sort((a, b) => a.sequence.compareTo(b.sequence));
     if (stops.isEmpty) {
       return CaptainGlassCard(
@@ -1440,10 +1697,11 @@ class _StopsTimeline extends StatelessWidget {
           _StopTile(
             stop: stops[i],
             isFirst: i == 0,
-            isLast: i == stops.length - 1,
+            isLast: i == stops.length - 1 && !_hasMore,
             isNext: i == nextIndex,
-            onChanged: onChanged,
+            onChanged: widget.onChanged,
           ),
+        if (_hasMore) _LoadMoreIndicator(loading: _loadingMore),
       ],
     );
   }
@@ -1614,7 +1872,23 @@ class _StopTile extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
+                    // Eye button — opens the waste-type breakdown for this
+                    // collection. Only meaningful once collected; a bin has
+                    // exactly one waste type, so the "list" is a single row.
+                    if (done)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        onPressed: () => _showBreakdown(context),
+                        icon: Icon(
+                          Icons.visibility_outlined,
+                          size: 19,
+                          color: CaptainTheme.mutedText,
+                        ),
+                      ),
+                    const SizedBox(width: 4),
                     Icon(
                       done
                           ? Icons.verified_rounded
@@ -1635,6 +1909,17 @@ class _StopTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showBreakdown(BuildContext context) {
+    final wasteTypeName = stop.bin.wasteType?.name ?? 'Waste';
+    final weight = stop.collectedWeightKg ?? 0;
+    showWasteBreakdownWindow(
+      context,
+      title: stop.collectionPoint.name,
+      subtitle: stop.bin.binName,
+      rows: [WasteBreakdownRow(wasteType: wasteTypeName, weightKg: weight)],
     );
   }
 
@@ -1714,8 +1999,11 @@ enum _StopTone {
 // the household weight-capture screen instead of a bin scan.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HouseholdTimeline extends StatelessWidget {
+/// Household stops, paginated — see [_StopsTimeline]'s doc comment; this is
+/// the same idea applied to `trip.householdCollections`.
+class _HouseholdTimeline extends StatefulWidget {
   const _HouseholdTimeline({
+    super.key,
     required this.trip,
     required this.onChanged,
     this.locked = false,
@@ -1729,13 +2017,65 @@ class _HouseholdTimeline extends StatelessWidget {
   final bool locked;
 
   @override
+  State<_HouseholdTimeline> createState() => _HouseholdTimelineState();
+}
+
+class _HouseholdTimelineState extends State<_HouseholdTimeline> {
+  final List<OperatorTripHouseholdStop> _extra = [];
+  bool _hasMore = false;
+  bool _loadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasMore =
+        widget.trip.progress.total > widget.trip.householdCollections.length;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HouseholdTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trip.assignmentUniqueId != widget.trip.assignmentUniqueId) {
+      _extra.clear();
+      _hasMore =
+          widget.trip.progress.total > widget.trip.householdCollections.length;
+      return;
+    }
+    final loaded = widget.trip.householdCollections.length + _extra.length;
+    if (loaded >= widget.trip.progress.total) _hasMore = false;
+  }
+
+  /// See [_StopsTimelineState.loadMore] — identical shape, household side.
+  Future<void> loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final nextPage = (_extra.length ~/ 20) + 2;
+      final page = await GetIt.instance<OperatorTripRepository>()
+          .fetchHouseholdCollectionsPage(
+        widget.trip.assignmentUniqueId,
+        nextPage,
+      );
+      if (!mounted) return;
+      setState(() {
+        _extra.addAll(page.items);
+        _hasMore = page.hasNext;
+      });
+    } catch (_) {
+      // Best-effort — see _StopsTimelineState.loadMore's comment.
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final timeline = _buildTimeline(context);
-    return locked ? _LockedContent(child: timeline) : timeline;
+    return widget.locked ? _LockedContent(child: timeline) : timeline;
   }
 
   Widget _buildTimeline(BuildContext context) {
-    final stops = [...trip.householdCollections]
+    final stops = [...widget.trip.householdCollections, ..._extra]
       ..sort((a, b) => a.sequence.compareTo(b.sequence));
     if (stops.isEmpty) {
       return CaptainGlassCard(
@@ -1765,12 +2105,13 @@ class _HouseholdTimeline extends StatelessWidget {
         for (var i = 0; i < stops.length; i++)
           _HouseholdTile(
             stop: stops[i],
-            assignmentId: trip.assignmentUniqueId,
+            assignmentId: widget.trip.assignmentUniqueId,
             isFirst: i == 0,
-            isLast: i == stops.length - 1,
+            isLast: i == stops.length - 1 && !_hasMore,
             isNext: i == nextIndex,
-            onChanged: onChanged,
+            onChanged: widget.onChanged,
           ),
+        if (_hasMore) _LoadMoreIndicator(loading: _loadingMore),
       ],
     );
   }
@@ -1942,7 +2283,23 @@ class _HouseholdTile extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
+                    // Eye button — opens the per-waste-type breakdown for
+                    // this collection (Wet/Dry/... kg). Only meaningful once
+                    // collected.
+                    if (done)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        onPressed: () => _showBreakdown(context),
+                        icon: Icon(
+                          Icons.visibility_outlined,
+                          size: 19,
+                          color: CaptainTheme.mutedText,
+                        ),
+                      ),
+                    const SizedBox(width: 4),
                     Icon(
                       done
                           ? Icons.verified_rounded
@@ -1959,6 +2316,27 @@ class _HouseholdTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showBreakdown(BuildContext context) {
+    final rows = stop.wasteBreakdown
+        .map((e) => WasteBreakdownRow(wasteType: e.wasteType, weightKg: e.weightKg))
+        .toList();
+    // A legacy collection with no per-type split recorded still has the
+    // combined total — fall back to a single "Waste Collected" row rather
+    // than showing an empty window for a genuinely collected stop.
+    if (rows.isEmpty && stop.collectedWeightKg != null) {
+      rows.add(WasteBreakdownRow(
+        wasteType: 'Waste Collected',
+        weightKg: stop.collectedWeightKg!,
+      ));
+    }
+    showWasteBreakdownWindow(
+      context,
+      title: stop.customerName,
+      subtitle: stop.address ?? 'Household ${stop.sequence}',
+      rows: rows,
     );
   }
 

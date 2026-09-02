@@ -611,11 +611,21 @@ class SupervisorWastePoint {
 /// [SupervisorWastePoint]) so the waste-summary cards' tap-through detail
 /// view can group collections by vehicle and list each one's collection
 /// points/status without a second network round trip.
+/// Which collection stream an event came from.
+///
+/// The two feeds are already fetched separately in
+/// `SupervisorRepository.fetchWasteEvents` (bin-collection events vs household
+/// waste collections) but the distinction used to be dropped on the floor, so
+/// the summary could only ever split by waste TYPE. Tagging it at construction
+/// lets the Bin / Household KPI cards aggregate without a backend change.
+enum SupervisorWasteSource { bin, household }
+
 class SupervisorWasteEvent {
   const SupervisorWasteEvent({
     required this.date,
     required this.weightKg,
     required this.wasteTypeName,
+    required this.source,
     this.vehicleUniqueId,
     this.vehicleNo,
     this.collectionPointName,
@@ -626,6 +636,7 @@ class SupervisorWasteEvent {
   final DateTime date;
   final double weightKg;
   final String wasteTypeName;
+  final SupervisorWasteSource source;
   final String? vehicleUniqueId;
   final String? vehicleNo;
   final String? collectionPointName;
@@ -634,6 +645,13 @@ class SupervisorWasteEvent {
 
   bool get isWet => wasteTypeName.toLowerCase().contains('wet');
   bool get isDry => wasteTypeName.toLowerCase().contains('dry');
+  bool get isBin => source == SupervisorWasteSource.bin;
+  bool get isHousehold => source == SupervisorWasteSource.household;
+
+  /// Display label for the waste stream, never blank — an unnamed type would
+  /// otherwise collapse into an empty row in the breakdown list.
+  String get displayTypeName =>
+      wasteTypeName.trim().isEmpty ? 'Unspecified' : wasteTypeName.trim();
   bool get hasValidDate => date.millisecondsSinceEpoch > 0;
 
   factory SupervisorWasteEvent.fromJson(Map<String, dynamic> j) {
@@ -646,6 +664,7 @@ class SupervisorWasteEvent {
       date: date,
       weightKg: _numKg(j['collected_weight_kg']),
       wasteTypeName: wasteType is Map ? _str(wasteType['waste_type_name']) : '',
+      source: SupervisorWasteSource.bin,
       vehicleUniqueId: vehicle is Map ? _str(vehicle['unique_id']) : null,
       vehicleNo: vehicle is Map ? _str(vehicle['vehicle_no']) : null,
       collectionPointName: cp is Map ? _str(cp['cp_name']) : null,
@@ -687,6 +706,7 @@ class SupervisorWasteEvent {
             date: date,
             weightKg: entry.value,
             wasteTypeName: entry.key,
+            source: SupervisorWasteSource.household,
             collectionPointName: customerName.isEmpty ? null : customerName,
             tripAssignmentId: tripAssignmentId,
             status: 'Collected',

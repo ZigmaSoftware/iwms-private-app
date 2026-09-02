@@ -47,6 +47,11 @@ class ApiConfig {
   static const String registerStaffFcmToken =
       '${desktopBase}user-creations/staffcreation/register-fcm-token/';
 
+  /// Driver-reported trip delays (puncture, traffic, minor repair) — a delay
+  /// does not stop the trip, unlike a breakdown.
+  static const String tripDelayReports =
+      '${desktopBase}schedule-operations/trip-delay-reports/';
+
   static const String vehicleBreakdowns =
       '${desktopBase}schedule-operations/vehicle-breakdowns/';
   static const String vehicleBreakdownAvailableStaff =
@@ -135,6 +140,11 @@ class ApiConfig {
       '${desktopBase}operator-mobile/scan-bin/';
   static const String operatorTripHistory =
       '${desktopBase}operator-mobile/trip-history/';
+  // Stops beyond the first page: my-trip-today/my-trips-today only ever embed
+  // the first STOPS_PAGE_SIZE (20) bin/household stops now — the rest is
+  // fetched here, 20 at a time, as the driver scrolls.
+  static const String operatorTripStops =
+      '${desktopBase}operator-mobile/trip-stops/';
   // Explicit trip start / end. `end` does NOT always end the trip: with
   // stops still pending it raises a Re-Trip request for a supervisor to
   // decide, rather than closing the assignment.

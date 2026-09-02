@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/driver_report_delay_sheet.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/driver_vehicle_breakdown_flow.dart';
 
-/// The driver header's danger button opens this — a 2x2 grid of report
-/// actions. Only "Vehicle breakdown" is wired for now.
+/// The driver header's danger button opens this — a grid of report actions.
+/// "Vehicle breakdown" and "Report delay" are wired; the rest are placeholders.
 class DriverReportActionsSheet extends StatelessWidget {
   const DriverReportActionsSheet({super.key});
 
@@ -76,6 +77,18 @@ class DriverReportActionsSheet extends StatelessWidget {
                       DriverAssignmentPickerSheet.show(context);
                     },
                   ),
+                  // Ranked second on purpose: a puncture or a hold-up happens
+                  // far more often than a dead vehicle, and sitting beside
+                  // "Vehicle breakdown" makes clear which to pick.
+                  _ActionCard(
+                    icon: Icons.timer_outlined,
+                    label: 'Report delay',
+                    color: CaptainTheme.warning,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      DriverReportDelaySheet.show(context);
+                    },
+                  ),
                   _ActionCard(
                     icon: Icons.groups_2_rounded,
                     label: 'Extra staff',
@@ -85,7 +98,7 @@ class DriverReportActionsSheet extends StatelessWidget {
                   _ActionCard(
                     icon: Icons.emergency_share_rounded,
                     label: 'Emergency',
-                    color: CaptainTheme.warning,
+                    color: CaptainTheme.danger,
                     onTap: () => _comingSoon(context),
                   ),
                   _ActionCard(

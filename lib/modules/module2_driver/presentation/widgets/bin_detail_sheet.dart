@@ -23,6 +23,9 @@ class BinDetailSheet extends StatefulWidget {
 class _BinDetailSheetState extends State<BinDetailSheet> {
   final TextEditingController _weightCtrl = TextEditingController();
   final TextEditingController _notesCtrl = TextEditingController();
+
+  /// Notes are collapsed until asked for — see the build method.
+  bool _notesOpen = false;
   bool _submitting = false;
   bool _statusSubmitting = false;
   String? _errorMessage;
@@ -37,15 +40,18 @@ class _BinDetailSheetState extends State<BinDetailSheet> {
   }
 
   Future<void> _submit() async {
+    // Weight is OPTIONAL. A crew with no working scale — or a route where the
+    // weighment only happens later at the plant — must still be able to mark
+    // the bin collected. A blank field sends no weight_kg at all; only a
+    // value that was actually typed is validated.
     final raw = _weightCtrl.text.trim();
-    if (raw.isEmpty) {
-      setState(() => _errorMessage = 'Please enter waste weight.');
-      return;
-    }
-    final weight = double.tryParse(raw);
-    if (weight == null || weight <= 0) {
-      setState(() => _errorMessage = 'Enter a valid weight greater than 0.');
-      return;
+    double? weight;
+    if (raw.isNotEmpty) {
+      weight = double.tryParse(raw);
+      if (weight == null || weight <= 0) {
+        setState(() => _errorMessage = 'Enter a valid weight greater than 0.');
+        return;
+      }
     }
 
     setState(() {
@@ -196,41 +202,57 @@ class _BinDetailSheetState extends State<BinDetailSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _InfoCard(
-                            icon: Icons.location_on_outlined,
-                            title: 'Collection point',
-                            primary: cp.name,
-                            secondary: (cp.latitude != null &&
-                                    cp.longitude != null)
-                                ? '${cp.latitude!.toStringAsFixed(5)}, ${cp.longitude!.toStringAsFixed(5)}'
-                                : null,
+                          // One context line replaces the two stacked info
+                          // cards. The collection point name was already in
+                          // the header title, and the raw lat/lng is not
+                          // something a driver acts on — the map tab is for
+                          // that. Progress stays because it answers "how much
+                          // is left", which the driver does act on.
+                          _ContextLine(
+                            cpName: cp.name,
+                            collected: progress.collected,
+                            total: progress.total,
+                            done: progress.completed,
                           ),
-                          const SizedBox(height: 12),
-                          _InfoCard(
-                            icon: Icons.task_alt_rounded,
-                            title: 'Trip progress',
-                            primary:
-                                '${progress.collected}/${progress.total} CPs collected',
-                            secondary: progress.completed
-                                ? 'All bins on this trip are now done.'
-                                : 'Scan the next bin to continue.',
-                            accent: progress.completed
-                                ? CaptainTheme.success
-                                : CaptainTheme.accent,
-                          ),
-                          const SizedBox(height: 18),
-                          const _SectionLabel('Waste weight'),
+                          const SizedBox(height: 16),
+                          const _SectionLabel('Waste weight (optional)'),
                           const SizedBox(height: 6),
                           _WeightField(controller: _weightCtrl),
-                          const SizedBox(height: 14),
-                          const _SectionLabel('Notes (optional)'),
-                          const SizedBox(height: 6),
-                          _NotesField(controller: _notesCtrl),
+                          const SizedBox(height: 12),
+                          // Notes start collapsed: most collections need none,
+                          // and an always-open multiline box pushed the primary
+                          // action off-screen on smaller phones.
+                          if (!_notesOpen)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () =>
+                                    setState(() => _notesOpen = true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: CaptainTheme.mutedText,
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                icon: const Icon(Icons.add_rounded, size: 17),
+                                label: const Text(
+                                  'Add note',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else ...[
+                            const _SectionLabel('Notes (optional)'),
+                            const SizedBox(height: 6),
+                            _NotesField(controller: _notesCtrl),
+                          ],
                           if (_errorMessage != null) ...[
                             const SizedBox(height: 12),
                             _ErrorBanner(message: _errorMessage!),
                           ],
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
                           _SubmitButton(
                             loading: _submitting,
                             onTap: (_submitting || _statusSubmitting)
@@ -284,16 +306,6 @@ class _BinDetailSheetState extends State<BinDetailSheet> {
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            onPressed: (_submitting || _statusSubmitting)
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                            style: TextButton.styleFrom(
-                              foregroundColor: CaptainTheme.mutedText,
-                            ),
-                            child: const Text('Cancel'),
                           ),
                         ],
                       ),
@@ -368,8 +380,12 @@ class _Header extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
+                      // The raw bin id (BIN-65a5…) used to sit here. It is
+                      // machine identity the driver cannot act on, and it
+                      // pushed the bin name onto a second line. Capacity
+                      // stays — it tells the driver what they are lifting.
                       Text(
-                        '${bin.binQr}  ·  ${bin.binCapacity} L',
+                        '${bin.binCapacity} L',
                         style: const TextStyle(
                           fontSize: 12.5,
                           color: Colors.white70,
@@ -415,78 +431,65 @@ class _Header extends StatelessWidget {
 // SUB-WIDGETS
 // ============================================================
 
-class _InfoCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String primary;
-  final String? secondary;
-  final Color? accent;
-
-  const _InfoCard({
-    required this.icon,
-    required this.title,
-    required this.primary,
-    this.secondary,
-    this.accent,
+/// Collection point + trip progress on one row.
+///
+/// Replaces two full-height `_InfoCard`s that between them repeated the
+/// collection point name already shown in the header and printed raw
+/// coordinates. This keeps the two facts a driver actually uses — where they
+/// are, and how much of the trip is left — in a single line.
+class _ContextLine extends StatelessWidget {
+  const _ContextLine({
+    required this.cpName,
+    required this.collected,
+    required this.total,
+    required this.done,
   });
+
+  final String cpName;
+  final int collected;
+  final int total;
+  final bool done;
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = accent ?? CaptainTheme.accent;
+    final accent = done ? CaptainTheme.success : CaptainTheme.accent;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: CaptainTheme.surface,
-        borderRadius: CaptainTheme.cardRadius,
+        color: CaptainTheme.surfaceMuted,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: CaptainTheme.hairline),
-        boxShadow: CaptainTheme.softShadow,
       ),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 12),
+          Icon(Icons.location_on_outlined,
+              size: 17, color: CaptainTheme.mutedText),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    color: CaptainTheme.mutedText,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.7,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  primary,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: CaptainTheme.strongText,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (secondary != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    secondary!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: CaptainTheme.mutedText,
-                    ),
-                  ),
-                ],
-              ],
+            child: Text(
+              cpName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: CaptainTheme.strongText,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(
+            done ? Icons.task_alt_rounded : Icons.radio_button_unchecked,
+            size: 15,
+            color: accent,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            '$collected/$total',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: accent,
             ),
           ),
         ],
@@ -531,7 +534,9 @@ class _WeightField extends StatelessWidget {
         color: CaptainTheme.strongText,
       ),
       decoration: InputDecoration(
-        hintText: 'e.g. 42.5',
+        // Says out loud that the field can be left alone, so a driver
+        // with no scale isn't hunting for a way past it.
+        hintText: 'e.g. 42.5  ·  leave blank if not weighed',
         hintStyle: TextStyle(
           color: CaptainTheme.mutedText,
           fontWeight: FontWeight.w500,

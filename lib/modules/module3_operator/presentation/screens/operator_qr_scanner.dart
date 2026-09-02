@@ -8,6 +8,7 @@ import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 import 'package:iwms_private_app/data/repositories/assignment_service.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
 import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
@@ -118,7 +119,39 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
         effectiveAssignmentId = resolvedAssignment?.uniqueId;
       }
       final normalizedAssignmentId = effectiveAssignmentId?.trim();
-      if (normalizedAssignmentId != null && normalizedAssignmentId.isNotEmpty) {
+
+      // ── Live-trip guard ────────────────────────────────────────────────
+      // A household may only be collected on the trip it is actually a stop
+      // on. Without this the scanner accepted ANY registered customer QR —
+      // including one from another trip or another project — and went
+      // straight to the collect sheet, so an unplanned household could be
+      // collected with no warning at all. The backend enforces the same rule
+      // (CUSTOMER_NOT_IN_TRIP / WRONG_PROJECT); this check exists so the
+      // driver is told at scan time instead of after capturing photos and
+      // weights. Fails OPEN on a network/lookup error: the backend still
+      // refuses, so a flaky connection must not block legitimate work.
+      if (normalizedAssignmentId == null || normalizedAssignmentId.isEmpty) {
+        _showMessage(
+          'No live trip found. Start your trip before scanning a household.',
+        );
+        _restartScanner();
+        return;
+      }
+      final membership = await _customerTripMembership(
+        assignmentId: normalizedAssignmentId,
+        candidateIds: {uid, canonicalId},
+      );
+      if (membership == _TripMembership.notOnTrip) {
+        final name = apiCustomer['customer_name']?.toString() ?? canonicalId;
+        _showMessage(
+          '$name is not on your current trip. You can only collect '
+          'households assigned to this trip.',
+        );
+        _restartScanner();
+        return;
+      }
+
+      if (normalizedAssignmentId.isNotEmpty) {
         final statuses = await AssignmentStatusStore.getStatusesFor(
           normalizedAssignmentId,
           {uid, canonicalId},
@@ -460,6 +493,42 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
       latitude: LocationService.latitude.toString(),
       longitude: LocationService.longitude.toString(),
     );
+  }
+
+
+  /// Whether [candidateIds] identify a household that is a stop on
+  /// [assignmentId]. Returns [_TripMembership.unknown] when the trip list
+  /// cannot be loaded, so the caller can fail open and let the backend be the
+  /// authority.
+  Future<_TripMembership> _customerTripMembership({
+    required String assignmentId,
+    required Set<String> candidateIds,
+  }) async {
+    try {
+      final trips = await getIt<OperatorTripRepository>().fetchMyTripsToday();
+      final wanted = assignmentId.trim();
+      OperatorTripToday? trip;
+      for (final candidate in trips) {
+        if (_normalizeId(candidate.assignmentUniqueId) == _normalizeId(wanted)) {
+          trip = candidate;
+          break;
+        }
+      }
+      // The resolved assignment isn't among today's trips for this crew —
+      // treat as unknown rather than blocking; the backend still decides.
+      if (trip == null) return _TripMembership.unknown;
+
+      final normalizedCandidates =
+          candidateIds.map(_normalizeId).where((e) => e.isNotEmpty).toSet();
+      for (final stop in trip.householdCollections) {
+        if (normalizedCandidates.contains(_normalizeId(stop.customerUniqueId))) {
+          return _TripMembership.onTrip;
+        }
+      }
+      return _TripMembership.notOnTrip;
+    } catch (_) {
+      return _TripMembership.unknown;
+    }
   }
 
   Future<DailyAssignmentModel?> _resolveActiveAssignment() async {
@@ -926,4 +995,17 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
       ),
     );
   }
+}
+
+/// Result of checking a scanned household against the live trip's stop list.
+enum _TripMembership {
+  /// The customer is a stop on the trip — collection may proceed.
+  onTrip,
+
+  /// The customer is definitively NOT a stop on the trip — block with a warning.
+  notOnTrip,
+
+  /// Membership could not be determined (trip list unavailable). Fail open and
+  /// let the backend's own guard decide.
+  unknown,
 }

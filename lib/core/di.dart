@@ -6,6 +6,7 @@ import 'package:iwms_private_app/data/repositories/assignment_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
 import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
+import 'package:iwms_private_app/data/repositories/trip_delay_repository.dart';
 import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_private_app/modules/module3_operator/logic/operator_trip_bloc.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
@@ -74,6 +75,9 @@ Future<void> setupDI() async {
 );
 
   // --- Operator-mobile flow ---
+  getIt.registerLazySingleton<TripDelayRepository>(
+    () => TripDelayRepository(),
+  );
   getIt.registerLazySingleton<OperatorTripRepository>(
     () => OperatorTripRepository(),
   );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/env.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
@@ -32,6 +33,10 @@ class _SupervisorWasteSummaryCardsState
   /// "Others" is collapsed by default: Wet and Dry are the two streams a
   /// supervisor reads at a glance, and everything else is long-tail detail.
   bool _othersExpanded = false;
+
+  /// Tapping the Total card reveals every waste type collected in the window,
+  /// bin and household alike — the full breakdown behind the headline number.
+  bool _totalExpanded = false;
 
   static const double _placeholderTargetKg = 10000;
 
@@ -220,6 +225,27 @@ class _SupervisorWasteSummaryCardsState
         .where((e) => e.isDry)
         .fold<double>(0, (sum, e) => sum + e.weightKg);
 
+    final binKg = events
+        .where((e) => e.isBin)
+        .fold<double>(0, (sum, e) => sum + e.weightKg);
+    final householdKg = events
+        .where((e) => e.isHousehold)
+        .fold<double>(0, (sum, e) => sum + e.weightKg);
+
+    final binPct = totalKg > 0 ? binKg / totalKg : 0.0;
+    final householdPct = totalKg > 0 ? householdKg / totalKg : 0.0;
+
+    // Every waste type collected in this window, whatever its source — this
+    // is what the Total card expands to show, so nothing that contributed to
+    // the headline number is hidden.
+    final allTotals = <String, double>{};
+    for (final e in events) {
+      allTotals[e.displayTypeName] =
+          (allTotals[e.displayTypeName] ?? 0) + e.weightKg;
+    }
+    final allRows = allTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
     // Every stream that is neither Wet nor Dry — Mixed, Sanitary, E-Waste,
     // whatever the project has configured. These are summed into the total
     // but had no card of their own, so their weight was invisible. Rather
@@ -231,8 +257,9 @@ class _SupervisorWasteSummaryCardsState
 
     final otherTotals = <String, double>{};
     for (final e in otherEvents) {
-      final label =
-          e.wasteTypeName.trim().isEmpty ? 'Unspecified' : e.wasteTypeName.trim();
+      final label = e.wasteTypeName.trim().isEmpty
+          ? 'Unspecified'
+          : e.wasteTypeName.trim();
       otherTotals[label] = (otherTotals[label] ?? 0) + e.weightKg;
     }
     final otherRows = otherTotals.entries.toList()
@@ -267,57 +294,106 @@ class _SupervisorWasteSummaryCardsState
             totalKg,
             targetPct,
           ),
+          // Full per-type breakdown behind the headline number, revealed by
+          // tapping the Total card above.
+          _totalBreakdown(rows: allRows, totalKg: totalKg, events: events),
           const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _breakdownCard(
-                  title: 'Wet Waste',
-                  valueKg: wetKg,
-                  pct: wetPct,
-                  iconAsset: 'assets/icons/bin.png',
-                  backgroundAsset: 'assets/cards/bin_card.png',
-                  // Was purple (0xFF7C3AED) — unrelated to this card's own
-                  // mint/teal-green artwork (bin_card.png). Deep teal instead,
-                  // pulled from that same background's hue family so the
-                  // label reads as part of the card rather than a clashing
-                  // accent color.
-                  valueColor: const Color(0xFF0F7A5C),
-                  onTap: () => showSupervisorWasteVehicleSheet(
-                    context,
-                    title: 'Wet Waste collections',
-                    accentColor: const Color(0xFF0F7A5C),
-                    events: events,
-                    matches: (e) => e.isWet,
+          // Collection-STREAM split (where the waste came from), sitting above
+          // the waste-TYPE split below so the two rows read as one grid.
+          if (kShowBinHouseholdKpiCards) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _breakdownCard(
+                    title: 'Bin Collection',
+                    valueKg: binKg,
+                    pct: binPct,
+                    iconAsset: 'assets/icons/bin2.png',
+                    backgroundAsset: 'assets/cards/bin_card2.png',
+                    valueColor: const Color(0xFF7C3AED),
+                    onTap: () => showSupervisorWasteVehicleSheet(
+                      context,
+                      title: 'Bin collections',
+                      accentColor: const Color(0xFF7C3AED),
+                      events: events,
+                      matches: (e) => e.isBin,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _breakdownCard(
-                  title: 'Dry Waste',
-                  valueKg: dryKg,
-                  pct: dryPct,
-                  iconAsset: 'assets/icons/household.png',
-                  backgroundAsset: 'assets/cards/household_card.png',
-                  // Was orange (0xFFF97316), then blue — reverted to this
-                  // card's own peach/amber hue family (household_card.png)
-                  // per request, but deeper/more saturated than the original
-                  // orange so it actually contrasts against the pale peach
-                  // background instead of blending into it.
-                  valueColor: const Color(0xFFB45309),
-                  onTap: () => showSupervisorWasteVehicleSheet(
-                    context,
-                    title: 'Dry Waste collections',
-                    accentColor: const Color(0xFFB45309),
-                    events: events,
-                    matches: (e) => e.isDry,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _breakdownCard(
+                    title: 'Households',
+                    valueKg: householdKg,
+                    pct: householdPct,
+                    iconAsset: 'assets/icons/household2.png',
+                    backgroundAsset: 'assets/cards/household_card2.png',
+                    valueColor: const Color(0xFFF97316),
+                    onTap: () => showSupervisorWasteVehicleSheet(
+                      context,
+                      title: 'Household collections',
+                      accentColor: const Color(0xFFF97316),
+                      events: events,
+                      matches: (e) => e.isHousehold,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (kShowWetDryKpiCards)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _breakdownCard(
+                    title: 'Wet Waste',
+                    valueKg: wetKg,
+                    pct: wetPct,
+                    iconAsset: 'assets/icons/bin.png',
+                    backgroundAsset: 'assets/cards/bin_card.png',
+                    // Was purple (0xFF7C3AED) — unrelated to this card's own
+                    // mint/teal-green artwork (bin_card.png). Deep teal instead,
+                    // pulled from that same background's hue family so the
+                    // label reads as part of the card rather than a clashing
+                    // accent color.
+                    valueColor: const Color(0xFF0F7A5C),
+                    onTap: () => showSupervisorWasteVehicleSheet(
+                      context,
+                      title: 'Wet Waste collections',
+                      accentColor: const Color(0xFF0F7A5C),
+                      events: events,
+                      matches: (e) => e.isWet,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _breakdownCard(
+                    title: 'Dry Waste',
+                    valueKg: dryKg,
+                    pct: dryPct,
+                    iconAsset: 'assets/icons/household.png',
+                    backgroundAsset: 'assets/cards/household_card.png',
+                    // Was orange (0xFFF97316), then blue — reverted to this
+                    // card's own peach/amber hue family (household_card.png)
+                    // per request, but deeper/more saturated than the original
+                    // orange so it actually contrasts against the pale peach
+                    // background instead of blending into it.
+                    valueColor: const Color(0xFFB45309),
+                    onTap: () => showSupervisorWasteVehicleSheet(
+                      context,
+                      title: 'Dry Waste collections',
+                      accentColor: const Color(0xFFB45309),
+                      events: events,
+                      matches: (e) => e.isDry,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           if (otherRows.isNotEmpty) ...[
             const SizedBox(height: 10),
             _othersSection(
@@ -444,12 +520,16 @@ class _SupervisorWasteSummaryCardsState
     );
   }
 
+  /// One waste-type row. Shared by the Total card's full breakdown and the
+  /// "Others" section — [matches] is what differs: the former selects every
+  /// event of that type, the latter only the non-Wet/Dry ones.
   Widget _otherRow({
     required String label,
     required double valueKg,
     required double totalKg,
     required Color accent,
     required List<SupervisorWasteEvent> events,
+    bool Function(SupervisorWasteEvent)? matches,
   }) {
     final pct = totalKg > 0 ? valueKg / totalKg : 0.0;
     final key = label.toLowerCase();
@@ -460,11 +540,12 @@ class _SupervisorWasteSummaryCardsState
         title: '$label collections',
         accentColor: accent,
         events: events,
-        matches: (e) {
-          if (e.isWet || e.isDry) return false;
-          final name = e.wasteTypeName.trim();
-          return (name.isEmpty ? 'unspecified' : name.toLowerCase()) == key;
-        },
+        matches: matches ??
+            (e) {
+              if (e.isWet || e.isDry) return false;
+              final name = e.wasteTypeName.trim();
+              return (name.isEmpty ? 'unspecified' : name.toLowerCase()) == key;
+            },
       ),
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
@@ -705,23 +786,29 @@ class _SupervisorWasteSummaryCardsState
     // Matches the empty background colour inside total_waste.png.
     const cardBackground = Color(0xFFEBF0FE);
 
-    return Container(
-      height: 112,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cardBackground,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFD9E4FB),
-        ),
-        boxShadow: SupervisorTheme.softShadow,
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              /*
+      child: InkWell(
+        onTap: () => setState(() => _totalExpanded = !_totalExpanded),
+        child: Container(
+          height: 112,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: cardBackground,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFFD9E4FB),
+            ),
+            boxShadow: SupervisorTheme.softShadow,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  /*
                * Illustration
                *
                * The image background and card background use the same
@@ -731,71 +818,161 @@ class _SupervisorWasteSummaryCardsState
                * Transform.scale enlarges it slightly without creating a
                * smaller invisible clipping container.
                */
-              Positioned(
-                left: constraints.maxWidth * 0.20,
-                right: 82,
-                top: 13,
-                bottom: 0,
-                child: ColoredBox(
-                  color: cardBackground,
-                  child: Transform.scale(
-                    scale: 1.20,
-                    alignment: Alignment.bottomCenter,
-                    child: Image.asset(
-                      'assets/cards/total_waste.png',
-                      fit: BoxFit.contain,
-                      alignment: Alignment.bottomCenter,
-                      filterQuality: FilterQuality.high,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 15,
-                top: 14,
-                right: 78,
-                child: Row(
-                  children: [
-                    const Flexible(
-                      child: Text(
-                        'Total Waste Collected',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          height: 1,
-                          fontWeight: FontWeight.w800,
-                          color: SupervisorTheme.strongText,
+                  Positioned(
+                    left: constraints.maxWidth * 0.20,
+                    right: 82,
+                    top: 13,
+                    bottom: 0,
+                    child: ColoredBox(
+                      color: cardBackground,
+                      child: Transform.scale(
+                        scale: 1.20,
+                        alignment: Alignment.bottomCenter,
+                        child: Image.asset(
+                          'assets/cards/total_waste.png',
+                          fit: BoxFit.contain,
+                          alignment: Alignment.bottomCenter,
+                          filterQuality: FilterQuality.high,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 7),
-                    _liveBadge(),
-                  ],
-                ),
-              ),
-              Positioned(
-                left: 15,
-                top: 58,
+                  ),
+                  Positioned(
+                    left: 15,
+                    top: 14,
+                    right: 78,
+                    child: Row(
+                      children: [
+                        const Flexible(
+                          child: Text(
+                            'Total Waste Collected',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              color: SupervisorTheme.strongText,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        _liveBadge(),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    left: 15,
+                    top: 58,
+                    child: Text(
+                      _fmt(totalKg),
+                      style: const TextStyle(
+                        fontSize: 30,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        color: SupervisorTheme.info,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 10,
+                    top: 21,
+                    child: _targetRing(targetPct),
+                  ),
+                  // Disclosure affordance for the per-type breakdown — a bare
+                  // chevron, no label: the whole card is the tap target.
+                  Positioned(
+                    left: 15,
+                    bottom: 8,
+                    child: AnimatedRotation(
+                      turns: _totalExpanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: SupervisorTheme.info,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Per-waste-type breakdown revealed by tapping the Total card.
+  ///
+  /// Covers BOTH streams, so the rows always add up to the headline total —
+  /// bin-side types come through dynamically from the API, household-side
+  /// ones from its fixed wet/dry/mixed/sanitary buckets.
+  Widget _totalBreakdown({
+    required List<MapEntry<String, double>> rows,
+    required double totalKg,
+    required List<SupervisorWasteEvent> events,
+  }) {
+    const accent = SupervisorTheme.info;
+
+    return AnimatedCrossFade(
+      duration: const Duration(milliseconds: 180),
+      crossFadeState:
+          _totalExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      firstChild: const SizedBox(width: double.infinity),
+      secondChild: Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: SupervisorTheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: SupervisorTheme.hairline.withValues(alpha: 0.5),
+            ),
+            boxShadow: SupervisorTheme.softShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 12, 12, 2),
                 child: Text(
-                  _fmt(totalKg),
-                  style: const TextStyle(
-                    fontSize: 30,
+                  'Collected by waste type',
+                  style: TextStyle(
+                    fontSize: 12.5,
                     height: 1,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                    color: SupervisorTheme.info,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
                   ),
                 ),
               ),
-              Positioned(
-                right: 10,
-                top: 21,
-                child: _targetRing(targetPct),
-              ),
+              if (rows.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(12, 12, 12, 14),
+                  child: Text(
+                    'Nothing collected in this period.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: SupervisorTheme.mutedText,
+                    ),
+                  ),
+                )
+              else
+                for (final row in rows)
+                  _otherRow(
+                    label: row.key,
+                    valueKg: row.value,
+                    totalKg: totalKg,
+                    accent: accent,
+                    events: events,
+                    matches: (e) => e.displayTypeName == row.key,
+                  ),
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }

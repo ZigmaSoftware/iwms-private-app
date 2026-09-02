@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:iwms_private_app/core/env.dart';
 import 'package:iwms_private_app/core/ui/app_copy.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/di.dart';
@@ -186,6 +187,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
     unawaited(PushNotificationService.instance.initAndRegister(
       registerUrl: ApiConfig.registerStaffFcmToken,
     ));
+    // Start the weigh-scale connection here, once, for the whole driver
+    // session — NOT inside household_collect_sheet.dart. That used to be the
+    // only place anything ever tried to connect, so a drop (out of range for
+    // a moment, the phone's Bluetooth stack idling, the module resetting)
+    // left the scale disconnected until the driver happened to reopen a
+    // collect sheet, which then had to ask them to connect again.
+    // BluetoothService now owns its own reconnect (including on app resume),
+    // so by the time any collect sheet opens the scale is normally already
+    // connected — the sheet only subscribes to it, it doesn't (re)connect it.
+    unawaited(BluetoothService().ensureConnected());
     _refreshUnreadNotificationCount();
     // No initial _centerOnDriver call here: FlutterMap only mounts once the
     // Map tab is selected (see _buildTab), so the controller isn't attached
@@ -239,12 +250,43 @@ class _DriverHomePageState extends State<DriverHomePage> {
         : !trip.isHousehold;
   }
 
+  /// Today's trips for [mode] that are still the driver's to work.
+  ///
+  /// CLOSED assignments are dropped: once the backend marks an assignment
+  /// Completed — whether the driver ended it, or a supervisor approved a
+  /// Re-Trip (which calls `mark_ended()` on the source and opens a
+  /// continuation) — its card has nothing left to act on and the trip belongs
+  /// in Trip History. It used to stay on the carousel because
+  /// `operator-mobile/my-trips-today/` only excludes CANCELLED assignments, so
+  /// the driver kept swiping past dead cards and, with a Re-Trip, past the
+  /// closed source trip sitting next to its own continuation.
+  ///
+  /// Filtering here (rather than only in the carousel widget) keeps selection,
+  /// the map tab and the scan button on the same set — see
+  /// [_applyCollectionModeState], which picks the selected trip from this list.
+  /// Trip sequencing is unaffected: `tripBlockers` only ever nominates an
+  /// UNFINISHED trip as a blocker, so removing closed ones cannot leave a
+  /// later trip stuck locked.
   List<OperatorTripToday> _tripsForMode(
     CollectionMode mode, [
     List<OperatorTripToday>? source,
   ]) {
     final trips = source ?? _todayTrips;
-    return trips.where((trip) => _tripMatchesMode(trip, mode)).toList();
+    return trips
+        .where((trip) => _tripMatchesMode(trip, mode) && !trip.isClosed)
+        .toList();
+  }
+
+  /// Trips for [mode] that were closed today — used only to tell "nothing
+  /// assigned" apart from "everything done" on the empty state.
+  int _closedTripCountForMode(
+    CollectionMode mode, [
+    List<OperatorTripToday>? source,
+  ]) {
+    final trips = source ?? _todayTrips;
+    return trips
+        .where((trip) => _tripMatchesMode(trip, mode) && trip.isClosed)
+        .length;
   }
 
   List<OperatorTripToday> get _visibleTodayTrips =>
@@ -872,6 +914,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
       case _DriverTab.home:
         return CaptainHomeTab(
           trips: _visibleTodayTrips,
+          closedTripCount:
+              _closedTripCountForMode(CollectionModeStore.mode.value),
           loading: _loadingTrip,
           error: _tripError,
           onRefresh: _loadAssignmentsForDriver,

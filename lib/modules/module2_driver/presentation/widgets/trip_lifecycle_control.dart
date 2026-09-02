@@ -43,7 +43,13 @@ class _TripLifecycleControlState extends State<TripLifecycleControl> {
   @override
   Widget build(BuildContext context) {
     final trip = widget.trip;
-    if (widget.locked || trip.isFinished) return const SizedBox.shrink();
+    // isClosed (status == Completed on the server), NOT isFinished/
+    // progress.completed: ending a trip is now a driver-confirmed action (see
+    // TripCompletionNudge) rather than something the backend does silently
+    // the moment the last stop resolves. A fully-resolved-but-not-yet-ended
+    // trip must keep showing this button — hiding it here would leave the
+    // driver with no way to end it if they dismiss the nudge.
+    if (widget.locked || trip.isClosed) return const SizedBox.shrink();
 
     if (trip.hasPendingRetrip) {
       return _PendingRetripBanner(request: trip.retripRequest!);
@@ -100,63 +106,103 @@ class _TripLifecycleControlState extends State<TripLifecycleControl> {
   }
 
   Future<void> _confirmEnd() async {
-    final trip = widget.trip;
-    final pendingBins =
-        trip.collectionPoints.where((c) => !c.isCollected).length;
-    final pendingHouseholds =
-        trip.householdCollections.where((h) => !h.isCollected).length;
-    final pending = pendingBins + pendingHouseholds;
-
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _ConfirmEndSheet(pendingStopCount: pending),
+    await confirmAndEndTrip(
+      context,
+      trip: widget.trip,
+      onChanged: widget.onChanged,
+      setBusy: (busy) {
+        if (mounted) setState(() => _busy = busy);
+      },
     );
-    if (confirmed != true) return;
-    await _end();
   }
+}
 
-  Future<void> _end({String? reason}) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      final result = await GetIt.instance<OperatorTripRepository>().endTrip(
-        widget.trip.assignmentUniqueId,
-        reason: reason,
+/// Runs the confirm-then-end sequence for [trip]: the confirm sheet, then
+/// `endTrip()`, then (if the backend asks for one) the reason sheet, then a
+/// final `endTrip(reason: ...)`.
+///
+/// Top-level and reusable so [TripLifecycleControl]'s own button and
+/// `TripCompletionNudge` (the floating "all stops resolved — end trip?"
+/// prompt) share exactly one place that knows how to end a trip, rather than
+/// each having its own copy of this sequence to keep in sync.
+///
+/// [setBusy], if given, is called with true/false around the network calls —
+/// callers without their own busy indicator can omit it.
+Future<void> confirmAndEndTrip(
+  BuildContext context, {
+  required OperatorTripToday trip,
+  required Future<void> Function() onChanged,
+  void Function(bool busy)? setBusy,
+}) async {
+  // Server-computed, NOT `trip.collectionPoints`/`householdCollections` —
+  // those only ever hold the first page of stops now (see STOPS_PAGE_SIZE on
+  // the backend), so counting against them would undercount a trip with more
+  // than one page left pending.
+  final pending = trip.progress.total - trip.progress.collected;
+
+  final confirmed = await showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => _ConfirmEndSheet(pendingStopCount: pending),
+  );
+  if (confirmed != true) return;
+  if (!context.mounted) return;
+  await _endTrip(context, trip: trip, onChanged: onChanged, setBusy: setBusy);
+}
+
+Future<void> _endTrip(
+  BuildContext context, {
+  required OperatorTripToday trip,
+  required Future<void> Function() onChanged,
+  void Function(bool busy)? setBusy,
+  String? reason,
+}) async {
+  setBusy?.call(true);
+  try {
+    final result = await GetIt.instance<OperatorTripRepository>().endTrip(
+      trip.assignmentUniqueId,
+      reason: reason,
+    );
+
+    if (result.reasonRequired) {
+      setBusy?.call(false);
+      if (!context.mounted) return;
+      final givenReason = await showEndTripReasonSheet(
+        context,
+        pendingBinCount: result.pendingBinCount,
+        pendingHouseholdCount: result.pendingHouseholdCount,
       );
-
-      if (result.reasonRequired) {
-        if (!mounted) return;
-        setState(() => _busy = false);
-        final givenReason = await showEndTripReasonSheet(
+      if (givenReason != null &&
+          givenReason.trim().isNotEmpty &&
+          context.mounted) {
+        await _endTrip(
           context,
-          pendingBinCount: result.pendingBinCount,
-          pendingHouseholdCount: result.pendingHouseholdCount,
+          trip: trip,
+          onChanged: onChanged,
+          setBusy: setBusy,
+          reason: givenReason.trim(),
         );
-        if (givenReason != null && givenReason.trim().isNotEmpty) {
-          await _end(reason: givenReason.trim());
-        }
-        return;
       }
-
-      if (result.ended) {
-        if (mounted) AppFlash.success(context, 'Trip completed');
-      } else if (result.retripRequested) {
-        if (mounted) {
-          AppFlash.success(
-            context,
-            'Requested next trip for the remaining stops — '
-            'awaiting supervisor approval',
-          );
-        }
-      }
-      await widget.onChanged();
-    } on OperatorTripException catch (e) {
-      if (mounted) AppFlash.error(context, _friendlyMessage(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      return;
     }
+
+    if (result.ended) {
+      if (context.mounted) AppFlash.success(context, 'Trip completed');
+    } else if (result.retripRequested) {
+      if (context.mounted) {
+        AppFlash.success(
+          context,
+          'Requested next trip for the remaining stops — '
+          'awaiting supervisor approval',
+        );
+      }
+    }
+    await onChanged();
+  } on OperatorTripException catch (e) {
+    if (context.mounted) AppFlash.error(context, _friendlyMessage(e));
+  } finally {
+    setBusy?.call(false);
   }
 }
 

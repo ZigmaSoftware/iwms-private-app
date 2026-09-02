@@ -244,6 +244,23 @@ class CustomerWasteType {
   String get key => name.toLowerCase();
 }
 
+/// One waste-type row in a household stop's collection breakdown — e.g.
+/// "Wet Waste, 3.5 kg". Shown in the "eye" floating window on a collected
+/// household tile.
+class WasteBreakdownEntry {
+  final String wasteType;
+  final double weightKg;
+
+  const WasteBreakdownEntry({required this.wasteType, required this.weightKg});
+
+  factory WasteBreakdownEntry.fromJson(Map<String, dynamic> json) {
+    return WasteBreakdownEntry(
+      wasteType: json['waste_type']?.toString() ?? 'Waste',
+      weightKg: _parseDouble(json['weight_kg']) ?? 0,
+    );
+  }
+}
+
 class OperatorTripHouseholdStop {
   final String uniqueId;
   final int sequence;
@@ -259,6 +276,12 @@ class OperatorTripHouseholdStop {
   final double? latitude;
   final double? longitude;
 
+  /// Per-waste-type split of [collectedWeightKg] — empty until collected,
+  /// and possibly still empty even once collected (a legacy row that never
+  /// went through the waste-type-split flow). See the "eye" button on
+  /// [_HouseholdTile] in captain_home_tab.dart.
+  final List<WasteBreakdownEntry> wasteBreakdown;
+
   const OperatorTripHouseholdStop({
     required this.uniqueId,
     required this.sequence,
@@ -273,6 +296,7 @@ class OperatorTripHouseholdStop {
     this.address,
     this.latitude,
     this.longitude,
+    this.wasteBreakdown = const [],
   });
 
   factory OperatorTripHouseholdStop.fromJson(Map<String, dynamic> json) {
@@ -293,6 +317,11 @@ class OperatorTripHouseholdStop {
       address: customer['address']?.toString(),
       latitude: _parseDouble(customer['latitude']),
       longitude: _parseDouble(customer['longitude']),
+      wasteBreakdown: (json['waste_breakdown'] as List? ?? const [])
+          .map((e) => WasteBreakdownEntry.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ))
+          .toList(),
     );
   }
 }
@@ -301,6 +330,18 @@ class OperatorTripProgress {
   final int collected;
   final int total;
   final int resolved;
+
+  /// Stops explicitly postponed (Collect Later / Skipped), as opposed to
+  /// collected or genuinely resolved-as-unavailable (Not Available).
+  ///
+  /// Server-computed because `collection_points`/`household_collections` are
+  /// no longer the full list once a trip has more than one page of stops
+  /// (see `STOPS_PAGE_SIZE` on the backend) — this field is what lets
+  /// `TripCompletionNudge` tell "everything truly collected" apart from
+  /// "resolved, but some carried over to a follow-up trip" without needing
+  /// every stop downloaded.
+  final int postponed;
+
   final bool completed;
 
   const OperatorTripProgress({
@@ -308,6 +349,7 @@ class OperatorTripProgress {
     required this.total,
     required this.resolved,
     required this.completed,
+    this.postponed = 0,
   });
 
   factory OperatorTripProgress.fromJson(Map<String, dynamic> json) {
@@ -316,6 +358,7 @@ class OperatorTripProgress {
       total: _parseInt(json['total']) ?? 0,
       resolved:
           _parseInt(json['resolved']) ?? _parseInt(json['collected']) ?? 0,
+      postponed: _parseInt(json['postponed']) ?? 0,
       completed: json['completed'] == true,
     );
   }
@@ -477,6 +520,21 @@ class OperatorTripToday {
   /// the backend, so the app's lock and the scan endpoint agree.
   bool get isFinished =>
       status.toLowerCase() == 'completed' || progress.completed;
+
+  /// The backend has CLOSED this assignment — it belongs in history, not on
+  /// today's carousel.
+  ///
+  /// Also true for a trip closed by an approved Re-Trip: `approve_retrip`
+  /// calls `mark_ended()` on the source assignment, so "Re-Trip assigned" and
+  /// "Completed" are the same end state as far as the app can see. Whatever
+  /// carried over arrives as a separate continuation assignment, which shows
+  /// up as its own (open) card.
+  ///
+  /// Deliberately NOT [isFinished]: that is also true when every stop is
+  /// resolved but the driver has not pressed "End Trip" yet, and such a trip
+  /// MUST stay on the carousel — hiding it would strip the driver of the only
+  /// control that can close it.
+  bool get isClosed => status.toLowerCase() == 'completed';
 
   /// True once the driver has explicitly pressed "Start Trip" — mirrors the
   /// backend's `require_trip_started` gate (which checks `actual_start_at`,

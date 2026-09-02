@@ -22,6 +22,7 @@ import 'package:iwms_private_app/shared/models/collection_history.dart';
 import 'package:iwms_private_app/shared/services/collection_history_service.dart';
 import 'package:iwms_private_app/modules/module3_operator/offline/pending_finalize_dao.dart';
 import 'package:iwms_private_app/modules/module3_operator/offline/pending_finalize_record.dart';
+import 'package:iwms_private_app/modules/module3_operator/services/bluetooth_permissons.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/generateunique_id.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/image_compress_service.dart';
@@ -142,10 +143,20 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       Future.delayed(const Duration(seconds: 1), () async {
         if (!await _ensureBluetoothPermissions()) return;
         debugPrint("♻️ Reinitializing Bluetooth adapter...");
-        await FlutterBluetoothSerial.instance.cancelDiscovery();
+        try {
+          await FlutterBluetoothSerial.instance.cancelDiscovery();
+        } catch (e) {
+          debugPrint("⚠️ cancelDiscovery skipped: $e");
+        }
         final isEnabled =
             await FlutterBluetoothSerial.instance.isEnabled ?? false;
-        if (!isEnabled) {
+        // Explicit BLUETOOTH_CONNECT re-check immediately before the enable
+        // prompt. A Dart try/catch CANNOT protect this call: without the
+        // runtime grant the plugin throws SecurityException, then replies a
+        // SECOND time to the same MethodChannel from onActivityResult on the
+        // Java main thread ("Reply already submitted") — a fatal crash Dart
+        // never sees. Simply not calling requestEnable is the only defence.
+        if (!isEnabled && await BluetoothPermissions.ensureConnect()) {
           try {
             await FlutterBluetoothSerial.instance.requestEnable();
           } catch (e) {
@@ -1208,7 +1219,10 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       await FlutterBluetoothSerial.instance.cancelDiscovery();
       final isEnabled =
           await FlutterBluetoothSerial.instance.isEnabled ?? false;
-      if (!isEnabled) {
+      // See the note in initState: requestEnable without a runtime
+      // BLUETOOTH_CONNECT grant crashes the process from the Java side, where
+      // this try/catch cannot reach it.
+      if (!isEnabled && await BluetoothPermissions.ensureConnect()) {
         await FlutterBluetoothSerial.instance.requestEnable();
       }
     } catch (e) {

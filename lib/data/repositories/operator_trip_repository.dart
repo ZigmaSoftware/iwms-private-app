@@ -6,6 +6,30 @@ import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 
+/// One page of a trip's stops from `operator-mobile/trip-stops/`.
+///
+/// [items] is untyped here on purpose — `fetchTripStopsPage` is the one
+/// generic method behind both `fetchCollectionPointsPage` (bin) and
+/// `fetchHouseholdCollectionsPage` (household), so it can't know which model
+/// to parse into. Those two methods do the actual `fromJson` mapping and
+/// hand back a properly typed `TripStopsPage<OperatorTripCollectionPoint>`/
+/// `TripStopsPage<OperatorTripHouseholdStop>`.
+class TripStopsPage<T> {
+  const TripStopsPage({
+    required this.items,
+    required this.page,
+    required this.count,
+    required this.hasNext,
+  });
+
+  final List<T> items;
+  final int page;
+
+  /// Total stops of this type on the trip — NOT `items.length`.
+  final int count;
+  final bool hasNext;
+}
+
 /// Thrown by the operator-trip repository for actionable, user-facing errors.
 ///
 /// `code` matches the backend's error codes (NO_ACTIVE_TRIP, WRONG_WASTE_TYPE,
@@ -88,6 +112,63 @@ class OperatorTripRepository {
                 Map<String, dynamic>.from(e as Map),
               ))
           .toList();
+    } on DioException catch (e) {
+      _throwDio(e);
+    }
+  }
+
+  /// Page [page] (1-based) of [assignmentId]'s bin stops, beyond whatever
+  /// `my-trip-today`/`my-trips-today` already embedded (the first 20 — see
+  /// `STOPS_PAGE_SIZE` on the backend). Always 20 per page.
+  Future<TripStopsPage<OperatorTripCollectionPoint>> fetchCollectionPointsPage(
+    String assignmentId,
+    int page,
+  ) =>
+      _fetchTripStopsPage(
+        assignmentId: assignmentId,
+        type: 'bin',
+        page: page,
+        fromJson: OperatorTripCollectionPoint.fromJson,
+      );
+
+  /// Household counterpart to [fetchCollectionPointsPage].
+  Future<TripStopsPage<OperatorTripHouseholdStop>> fetchHouseholdCollectionsPage(
+    String assignmentId,
+    int page,
+  ) =>
+      _fetchTripStopsPage(
+        assignmentId: assignmentId,
+        type: 'household',
+        page: page,
+        fromJson: OperatorTripHouseholdStop.fromJson,
+      );
+
+  Future<TripStopsPage<T>> _fetchTripStopsPage<T>({
+    required String assignmentId,
+    required String type,
+    required int page,
+    required T Function(Map<String, dynamic>) fromJson,
+  }) async {
+    final dio = await authorizedDio();
+    try {
+      final resp = await dio.get(
+        ApiConfig.operatorTripStops,
+        queryParameters: {
+          'assignment_id': assignmentId,
+          'type': type,
+          'page': page,
+        },
+      );
+      final data = Map<String, dynamic>.from(resp.data as Map);
+      final results = (data['results'] as List? ?? const [])
+          .map((e) => fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      return TripStopsPage<T>(
+        items: results,
+        page: (data['page'] as num?)?.toInt() ?? page,
+        count: (data['count'] as num?)?.toInt() ?? results.length,
+        hasNext: data['has_next'] == true,
+      );
     } on DioException catch (e) {
       _throwDio(e);
     }

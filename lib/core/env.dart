@@ -10,12 +10,35 @@ const bool kProd = bool.fromEnvironment(
 const bool kEnforcePermissions =
     bool.fromEnvironment('VITE_ENFORCE_PERMISSIONS', defaultValue: true);
 
+// ── Supervisor waste KPI cards ──────────────────────────────────────────────
+// Which pair(s) of breakdown cards the supervisor's waste summary shows under
+// the Total card. They are independent, so any combination works:
+//
+//   both true   → Bin/Household row on top, Wet/Dry row beneath (default)
+//   only one    → that single row
+//   both false  → Total card alone (its tap-through breakdown still works)
+//
+// Toggle at build time, e.g.
+//   flutter run --dart-define=VITE_SHOW_WET_DRY_CARDS=false
+//   flutter run --dart-define=VITE_SHOW_BIN_HOUSEHOLD_CARDS=false
+//
+/// Show the "Wet Waste" / "Dry Waste" cards (split by waste TYPE).
+const bool kShowWetDryKpiCards =
+    bool.fromEnvironment('VITE_SHOW_WET_DRY_CARDS', defaultValue: true);
+
+/// Show the "Bin Collection" / "Households" cards (split by collection STREAM).
+const bool kShowBinHouseholdKpiCards =
+    bool.fromEnvironment('VITE_SHOW_BIN_HOUSEHOLD_CARDS', defaultValue: false);
+
 const String _defaultPrivateApiBase = 'http://115.245.93.26:4216/api/v1';
 const String _defaultPrivateBackendOrigin = 'http://115.245.93.26:4216';
 
+// const String _defaultPrivateApiBase = 'http://192.168.3.120:8000/api/v1';
+// const String _defaultPrivateBackendOrigin = 'http://192.168.3.120:8000';
+
 // Override the private backend bases via dart-define if needed.
 const String _localApiOverride = String.fromEnvironment(
-  'VITE_PRIVATE_API_LOCAL', 
+  'VITE_PRIVATE_API_LOCAL',
   defaultValue: _defaultPrivateApiBase,
 );
 const String _prodApiOverride = String.fromEnvironment(
@@ -63,5 +86,3 @@ const String kMapTilerApiKey = String.fromEnvironment(
   'VITE_MAPTILER_API_KEY',
   defaultValue: 'UqY8ZGGSQrQPGUjvuBOc',
 );
-
-
