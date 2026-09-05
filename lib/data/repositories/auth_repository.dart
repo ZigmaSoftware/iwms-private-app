@@ -195,6 +195,9 @@ class AuthRepository {
           "username": username,
           "password": password,
           "login_type": "staff",
+          // Identifies this as the mobile app so the backend applies the App
+          // Module gate. A web sign-in sends no client and is never gated.
+          "client": "mobile",
         },
       );
 
@@ -232,6 +235,7 @@ class AuthRepository {
         "username": username,
         "password": password,
         "login_type": "customer",
+        "client": "mobile",
       },
     );
 

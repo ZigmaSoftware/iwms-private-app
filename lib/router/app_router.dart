@@ -208,7 +208,8 @@ class AppRouter {
             final s = authBloc.state;
             final username =
                 (s is AuthStateAuthenticated) ? s.userName : "Citizen";
-            return CitizenTheme.wrap(context, ProfileScreen(userName: username));
+            return CitizenTheme.wrap(
+                context, ProfileScreen(userName: username));
           },
         ),
 
@@ -396,10 +397,64 @@ class AppRouter {
     return null;
   }
 
+  /// Surfaces this app refuses to land a staff user on, however the backend
+  /// reports them.
+  ///
+  /// `admin` is deprecated on mobile: the dashboard is a web surface, and a
+  /// staff member holding admin permissions alongside a field role (very
+  /// common — see `infer_app_surfaces` on the backend, where `admin` is also
+  /// the catch-all for any role it can't classify) was being stopped at the
+  /// "Choose module" picker on every single login instead of going straight
+  /// to work.
+  ///
+  /// Nothing is deleted: `/admin/home`, `DashboardScreen` and
+  /// `StaffModulePickerScreen` all stay registered and compiling, so
+  /// re-enabling this is a one-line change to this set. They are simply never
+  /// offered, never auto-selected, and `_isLocationAllowed` now bounces a
+  /// direct `/admin/*` deep link back to the user's real surface.
+  static const Set<String> _deprecatedSurfaceKeys = {'admin'};
+
+  /// The surfaces left after dropping deprecated ones — what routing and the
+  /// (now unreachable) picker actually see.
+  ///
+  /// Returns nothing when no mobile surface is granted. In strict permission
+  /// mode, manufacturing a Driver surface here is a data leak: the user lands
+  /// in the app even though Staff Access Configuration granted no app module.
+  @visibleForTesting
+  static List<AppSurfaceAccess> selectableSurfaces(
+    List<AppSurfaceAccess> surfaces,
+  ) {
+    final routable =
+        surfaces.where((surface) => surface.route.isNotEmpty).toList();
+    final live = routable
+        .where((surface) =>
+            !_deprecatedSurfaceKeys.contains(surface.key.toLowerCase()))
+        .toList();
+    return live;
+  }
+
+  /// True when [route] belongs to a surface this app no longer lands on — used
+  /// to ignore a backend `landing` route still pointing at the admin
+  /// dashboard.
+  static bool _isDeprecatedRoute(String route) {
+    final key = _surfaceForLocation(route);
+    return key != null && _deprecatedSurfaceKeys.contains(key);
+  }
+
   List<AppSurfaceAccess> _resolveAccessibleSurfaces(
       AuthStateAuthenticated auth) {
+    return selectableSurfaces(_rawSurfacesFor(auth));
+  }
+
+  /// The surfaces as reported by the backend (or inferred from the role only
+  /// when the backend is too old to send app-screen data) — BEFORE deprecated
+  /// ones are dropped.
+  List<AppSurfaceAccess> _rawSurfacesFor(AuthStateAuthenticated auth) {
     final bundle = auth.permissionBundle;
-    if (bundle != null && bundle.appSurfaces.isNotEmpty) {
+    if (bundle != null &&
+        (bundle.receivedAppScreens ||
+            bundle.permissionVersion != null ||
+            bundle.generatedAt != null)) {
       return bundle.appSurfaces
           .where((surface) => surface.route.isNotEmpty)
           .toList();
@@ -473,8 +528,15 @@ class AppRouter {
       return AppRoutePaths.staffModuleSelection;
     }
 
+    // The backend's own `landing` hint wins — EXCEPT when it points at a
+    // deprecated surface. `build_landing` derives it from `app_surfaces[0]`,
+    // so an account whose first surface was admin still gets a
+    // landing of `/admin/home`; honouring that would walk straight back into
+    // the surface we just filtered out.
     final landingRoute = auth.permissionBundle?.landing?.route;
-    if (landingRoute != null && landingRoute.isNotEmpty) {
+    if (landingRoute != null &&
+        landingRoute.isNotEmpty &&
+        !_isDeprecatedRoute(landingRoute)) {
       return landingRoute;
     }
 
@@ -504,7 +566,7 @@ class AppRouter {
     );
   }
 
-  String? _surfaceForLocation(String location) {
+  static String? _surfaceForLocation(String location) {
     if (location.startsWith('/citizen/')) return 'citizen';
     if (location.startsWith('/operator/')) return 'operator';
     if (location.startsWith('/driver/')) return 'driver';

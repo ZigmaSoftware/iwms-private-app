@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/permissions/app_screens.dart';
+import 'package:iwms_private_app/core/permissions/feature_access.dart';
 import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_private_app/logic/auth/auth_event.dart';
 import 'package:iwms_private_app/logic/auth/auth_state.dart';
@@ -48,14 +50,24 @@ class _SupervisorShell extends StatefulWidget {
 }
 
 class _SupervisorShellState extends State<_SupervisorShell> {
-  static const _slotTabs = <SupervisorNavTab>[
-    SupervisorNavTab.dashboard,
-    SupervisorNavTab.trips,
-    SupervisorNavTab.attendance,
-    SupervisorNavTab.profile,
-  ];
+  /// Every slot the shell can show, with the app screen that unlocks it.
+  /// Profile is unconditional — a signed-in user can always reach their own
+  /// profile and sign out, whatever else they were granted.
+  static const _tabScreens = <SupervisorNavTab, String?>{
+    SupervisorNavTab.dashboard: AppScreens.supervisorDashboard,
+    SupervisorNavTab.trips: AppScreens.supervisorTrips,
+    SupervisorNavTab.attendance: AppScreens.supervisorAttendance,
+    SupervisorNavTab.profile: null,
+  };
 
   late SupervisorNavTab _activeTab = widget.initialTab;
+
+  /// Always the full 4 tabs. [SupervisorAnimatedNavBar] is a fixed 4-slot
+  /// layout with a hard assertion on that count, not a list that can shrink —
+  /// filtering it by grant used to crash the shell outright the moment one
+  /// screen (e.g. Attendance) wasn't granted. [_buildTab] shows a "no access"
+  /// placeholder in the body instead of hiding the slot.
+  List<SupervisorNavTab> get _slotTabs => _tabScreens.keys.toList();
 
   void _setTab(SupervisorNavTab tab) {
     if (_activeTab == tab) return;
@@ -110,33 +122,21 @@ class _SupervisorShellState extends State<_SupervisorShell> {
   Widget build(BuildContext context) {
     final name = _identityName();
 
-    final navItems = <SupervisorNavItem>[
-      const SupervisorNavItem(
-        icon: Icons.dashboard_rounded,
-        label: 'Dashboard',
-      ),
-      const SupervisorNavItem(
-        icon: Icons.local_shipping_rounded,
-        label: 'Trips',
-      ),
-      const SupervisorNavItem(
-        icon: Icons.fingerprint_rounded,
-        label: 'Attendance',
-      ),
-      const SupervisorNavItem(
-        icon: Icons.person_rounded,
-        label: 'Profile',
-        iconAsset: 'assets/icons/profile_s.png',
-      ),
-    ];
+    final slots = _slotTabs;
+    final navItems = slots.map(_navItemFor).toList();
 
-    final activeSlot =
-        _slotTabs.indexOf(_activeTab).clamp(0, _slotTabs.length - 1);
+    // A tab the user has lost access to (permissions changed while they were
+    // signed in) must not leave the shell pointing at nothing.
+    if (!slots.contains(_activeTab)) {
+      _activeTab = slots.first;
+    }
+    final activeSlot = slots.indexOf(_activeTab).clamp(0, slots.length - 1);
 
     return WillPopScope(
       onWillPop: () async {
-        if (_activeTab != SupervisorNavTab.dashboard) {
-          _setTab(SupervisorNavTab.dashboard);
+        final home = slots.first;
+        if (_activeTab != home) {
+          _setTab(home);
           return false;
         }
         return true;
@@ -171,14 +171,45 @@ class _SupervisorShellState extends State<_SupervisorShell> {
         bottomNavigationBar: SupervisorAnimatedNavBar(
           activeIndex: activeSlot,
           items: navItems,
-          onTabSelected: (index) => _setTab(_slotTabs[index]),
+          onTabSelected: (index) => _setTab(slots[index]),
         ),
       ),
     );
   }
 
+  SupervisorNavItem _navItemFor(SupervisorNavTab tab) {
+    switch (tab) {
+      case SupervisorNavTab.dashboard:
+        return const SupervisorNavItem(
+          icon: Icons.dashboard_rounded,
+          label: 'Dashboard',
+        );
+      case SupervisorNavTab.trips:
+        return const SupervisorNavItem(
+          icon: Icons.local_shipping_rounded,
+          label: 'Trips',
+        );
+      case SupervisorNavTab.attendance:
+        return const SupervisorNavItem(
+          icon: Icons.fingerprint_rounded,
+          label: 'Attendance',
+        );
+      case SupervisorNavTab.profile:
+        return const SupervisorNavItem(
+          icon: Icons.person_rounded,
+          label: 'Profile',
+          iconAsset: 'assets/icons/profile_s.png',
+        );
+    }
+  }
+
   Widget _buildTab(String name) {
     final empId = _identityEmpId();
+    final requiredScreen = _tabScreens[_activeTab];
+    if (requiredScreen != null && !context.canSeeScreen(requiredScreen)) {
+      return _NoAccessTab(tabLabel: _navItemFor(_activeTab).label);
+    }
+
     switch (_activeTab) {
       case SupervisorNavTab.dashboard:
         return SupervisorHomePage(
@@ -199,5 +230,49 @@ class _SupervisorShellState extends State<_SupervisorShell> {
           onLogout: _logout,
         );
     }
+  }
+}
+
+/// Shown in place of a tab's real content when the signed-in supervisor has
+/// not been granted the screen behind it. The nav slot itself always stays —
+/// [SupervisorAnimatedNavBar] is a fixed 4-slot layout — so only the body
+/// changes.
+class _NoAccessTab extends StatelessWidget {
+  const _NoAccessTab({required this.tabLabel});
+
+  final String tabLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: SupervisorTheme.background,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 40,
+            color: SupervisorTheme.mutedText,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "You don't have access to $tabLabel.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: SupervisorTheme.mutedText, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ask your administrator to grant it in Staff Access Configuration.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: SupervisorTheme.mutedText.withOpacity(0.7),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

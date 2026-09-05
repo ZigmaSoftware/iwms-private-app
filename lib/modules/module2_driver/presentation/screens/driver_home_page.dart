@@ -27,6 +27,8 @@ import 'package:iwms_private_app/logic/auth/auth_event.dart';
 import 'package:iwms_private_app/logic/auth/auth_state.dart';
 import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/push/push_notification_service.dart';
+import 'package:iwms_private_app/core/permissions/app_screens.dart';
+import 'package:iwms_private_app/core/permissions/feature_access.dart';
 import 'package:iwms_private_app/core/map/map_style.dart';
 import 'package:iwms_private_app/core/ors_service.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
@@ -138,6 +140,15 @@ class _TripPlannedStop {
 /// turn-by-turn navigation view; the centre Scan FAB owns collection.
 /// (Assignments folded into Home — trip history opens from a quick action.)
 enum _DriverTab { home, map, attendance, profile }
+
+const Map<_DriverTab, String?> _driverTabScreens = {
+  _DriverTab.home: AppScreens.driverTrips,
+  _DriverTab.map: AppScreens.driverTrips,
+  _DriverTab.attendance: AppScreens.driverAttendance,
+  // Profile is self-service and gives the user a way to sign out after a valid
+  // app-module login.
+  _DriverTab.profile: null,
+};
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
@@ -452,11 +463,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
     VehicleModel? selectedVehicle,
     CollectionMode collectionMode,
   ) {
+    final slots = _availableTabs(context);
+    if (!slots.contains(_activeTab)) {
+      _activeTab = slots.first;
+    }
     final pullInHeader =
         _activeTab == _DriverTab.attendance || _activeTab == _DriverTab.profile;
     // The toggle is only relevant on tabs that actually show trips.
     final showCollectionToggle =
         _activeTab == _DriverTab.home || _activeTab == _DriverTab.map;
+    final canScan = context.canSeeScreen(AppScreens.driverBins) ||
+        context.canSeeScreen(AppScreens.driverHouseholds);
+    final activeIndex = slots.indexOf(_activeTab).clamp(0, slots.length - 1);
 
     return Scaffold(
       backgroundColor: DriverTheme.background,
@@ -508,37 +526,72 @@ class _DriverHomePageState extends State<DriverHomePage> {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: CaptainScanFab(onPressed: _openScanner),
+      floatingActionButton:
+          canScan ? CaptainScanFab(onPressed: _openScanner) : null,
       bottomNavigationBar: CaptainNavBar(
-        activeIndex: _activeTab.index,
+        activeIndex: activeIndex,
         onTabSelected: (index) {
-          final tab = _tabFromIndex(index);
+          final tab = slots[index];
           if (_activeTab != tab) setState(() => _activeTab = tab);
         },
-        items: const [
-          CaptainNavItem(
-            icon: Icons.home_rounded,
-            label: AppCopy.driverTabHome,
-          ),
-          CaptainNavItem(
-            icon: Icons.map_rounded,
-            label: AppCopy.driverTabMap,
-          ),
-          CaptainNavItem(
-            icon: Icons.event_available_rounded,
-            label: AppCopy.driverTabAttendance,
-            blink: true,
-          ),
-          CaptainNavItem(
-            icon: Icons.person_outline_rounded,
-            label: AppCopy.driverTabProfile,
-          ),
-        ],
+        items: slots.map(_navItemFor).toList(),
       ),
     );
   }
 
+  /// Always the full 4 tabs: [CaptainNavBar] is a fixed layout — two slots
+  /// either side of a centred Scan button — with a hard assertion on that
+  /// count, not a list that can shrink. A driver missing one screen's
+  /// permission still gets a nav slot; [_buildTab] shows a "no access"
+  /// placeholder in its body instead of a real screen. Losing the slot
+  /// crashed the whole app the moment one grant was missing.
+  List<_DriverTab> _availableTabs(BuildContext context) => _DriverTab.values;
+
+  CaptainNavItem _navItemFor(_DriverTab tab) {
+    switch (tab) {
+      case _DriverTab.home:
+        return const CaptainNavItem(
+          icon: Icons.home_rounded,
+          label: AppCopy.driverTabHome,
+        );
+      case _DriverTab.map:
+        return const CaptainNavItem(
+          icon: Icons.map_rounded,
+          label: AppCopy.driverTabMap,
+        );
+      case _DriverTab.attendance:
+        return const CaptainNavItem(
+          icon: Icons.event_available_rounded,
+          label: AppCopy.driverTabAttendance,
+          blink: true,
+        );
+      case _DriverTab.profile:
+        return const CaptainNavItem(
+          icon: Icons.person_outline_rounded,
+          label: AppCopy.driverTabProfile,
+        );
+    }
+  }
+
   Future<void> _loadAssignmentsForDriver() async {
+    if (!context.canSeeScreen(AppScreens.driverTrips)) {
+      setState(() {
+        _loadingCustomers = false;
+        _loadingAssignments = false;
+        _loadingTrip = false;
+        _customerError = null;
+        _assignmentError = null;
+        _tripError = null;
+        _todayTrips = const [];
+        _todayTrip = null;
+        _mapTrip = null;
+        _currentAssignments = const [];
+        _historyAssignments = const [];
+        _activeTripDetail = null;
+      });
+      return;
+    }
+
     setState(() {
       _loadingCustomers = true;
       _loadingAssignments = true;
@@ -910,6 +963,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState,
       String empIdFromState, VehicleModel? vehicle) {
+    final requiredScreen = _driverTabScreens[tab];
+    if (requiredScreen != null && !context.canSeeScreen(requiredScreen)) {
+      return _NoAccessTab(tabLabel: _navItemFor(tab).label);
+    }
+
     switch (tab) {
       case _DriverTab.home:
         return CaptainHomeTab(
@@ -1153,6 +1211,49 @@ class _ScanChoiceTile extends StatelessWidget {
 // ============================================================
 // PART 3: HomeTab Widget with Map and Navigation
 // ============================================================
+/// Shown in place of a tab's real content when the signed-in driver has not
+/// been granted the screen behind it. The nav slot itself always stays —
+/// [CaptainNavBar] is a fixed 4-slot layout — so only the body changes.
+class _NoAccessTab extends StatelessWidget {
+  const _NoAccessTab({required this.tabLabel});
+
+  final String tabLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: DriverTheme.background,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 40,
+            color: DriverTheme.mutedText,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "You don't have access to $tabLabel.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: DriverTheme.mutedText, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ask your administrator to grant it in Staff Access Configuration.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: DriverTheme.mutedText.withOpacity(0.7),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HomeTab extends StatefulWidget {
   const _HomeTab({
     required this.mapController,

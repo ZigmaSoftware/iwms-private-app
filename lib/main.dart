@@ -8,6 +8,7 @@ import 'package:iwms_private_app/localization/app_localizations.dart';
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/core/push/push_notification_service.dart';
 import 'package:iwms_private_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_private_app/logic/auth/auth_event.dart';
 import 'package:iwms_private_app/logic/theme/theme_cubit.dart';
 import 'package:iwms_private_app/logic/locale/locale_cubit.dart';
 import 'package:iwms_private_app/router/app_router.dart';
@@ -43,6 +44,43 @@ Future<void> main() async {
   );
 }
 
+/// Re-fetches permissions when the app returns to the foreground, so a change
+/// an administrator makes in web takes effect without the user signing out.
+class _PermissionRefreshOnResume extends StatefulWidget {
+  const _PermissionRefreshOnResume({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PermissionRefreshOnResume> createState() =>
+      _PermissionRefreshOnResumeState();
+}
+
+class _PermissionRefreshOnResumeState extends State<_PermissionRefreshOnResume>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<AuthBloc>().add(AuthPermissionsRefreshRequested());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class MyApp extends StatelessWidget {
   final GoRouter appRouter;
   final AuthBloc authBloc;
@@ -61,28 +99,30 @@ class MyApp extends StatelessWidget {
         BlocProvider(create: (_) => ThemeCubit()),
         BlocProvider(create: (_) => LocaleCubit()), // ✅ FIX
       ],
-      child: BlocBuilder<ThemeCubit, ThemeMode>(
-        builder: (context, themeMode) {
-          return MaterialApp.router(
-            debugShowCheckedModeBanner: false,
-            title: 'IWMS',
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: const [
-              Locale('en'),
-              Locale('hi'),
-              Locale('ta'),
-            ],
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: themeMode,
-            routerConfig: appRouter,
-          );
-        },
+      child: _PermissionRefreshOnResume(
+        child: BlocBuilder<ThemeCubit, ThemeMode>(
+          builder: (context, themeMode) {
+            return MaterialApp.router(
+              debugShowCheckedModeBanner: false,
+              title: 'IWMS',
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [
+                Locale('en'),
+                Locale('hi'),
+                Locale('ta'),
+              ],
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeMode,
+              routerConfig: appRouter,
+            );
+          },
+        ),
       ),
     );
   }

@@ -18,8 +18,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthCitizenRegisterRequested>(_onCitizenRegisterRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
     on<AuthOperatorLoginRequested>(_onOperatorLoginRequested);
+    on<AuthPermissionsRefreshRequested>(_onPermissionsRefreshRequested);
 
     initialization.then((_) => add(AuthStatusChecked()));
+  }
+
+  Future<void> _onPermissionsRefreshRequested(
+    AuthPermissionsRefreshRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final current = state;
+    if (current is! AuthStateAuthenticated) return;
+
+    final refreshed = await _authRepository.refreshCurrentUserPermissions();
+    if (refreshed == null) return;
+
+    // Only rebuild when the grants actually changed. permission_version is a
+    // hash of the resolved permissions, so an unchanged one means every screen
+    // can keep its state instead of being torn down on every resume.
+    final before = current.permissionBundle?.permissionVersion;
+    final after = refreshed.permissionBundle?.permissionVersion;
+    if (before != null && before == after) return;
+
+    emit(_authenticatedStateFromUser(refreshed));
   }
 
   Future<void> _onStatusChecked(

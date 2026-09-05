@@ -1,5 +1,5 @@
 // Supervisor module data models. These mirror the backend payloads from
-// `/api/v1/user-creations/supervisor-zone-map/me/` and
+// `/api/v1/staff-creations/supervisor-zone-map/me/` (never wired — see SupervisorRepository.fetchMyZoneScope) and
 // `/api/v1/schedule-masters/daily-trip-assignments/`.
 
 import 'package:iwms_private_app/data/models/operator_trip_models.dart'
@@ -715,7 +715,7 @@ class SupervisorWasteEvent {
   }
 }
 
-/// A staff member (from `user-creations/staffcreation/`), used by the Staffs
+/// A staff member (from `staff-creations/staffcreation/`), used by the Staffs
 /// list which groups people by designation.
 class SupervisorStaff {
   const SupervisorStaff({

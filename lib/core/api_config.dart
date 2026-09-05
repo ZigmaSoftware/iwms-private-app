@@ -44,8 +44,14 @@ class ApiConfig {
       '${desktopBase}customer-masters/customercreations/';
   static const String registerFcmToken =
       '${desktopBase}customer-masters/customercreations/register-fcm-token/';
+  // "staff-creations", not "user-creations" — the backend's router group and
+  // the underlying model package (app.models.user_creations ->
+  // app.models.staff_creations) were both renamed in a dev merge. This one
+  // was left pointing at the old URL, so every registration attempt 404'd
+  // silently (the client only debugPrints a failed registration, never
+  // surfaces it) — no driver/operator/supervisor ever got a push as a result.
   static const String registerStaffFcmToken =
-      '${desktopBase}user-creations/staffcreation/register-fcm-token/';
+      '${desktopBase}staff-creations/staffcreation/register-fcm-token/';
 
   /// Driver-reported trip delays (puncture, traffic, minor repair) — a delay
   /// does not stop the trip, unlike a breakdown.
@@ -121,7 +127,12 @@ class ApiConfig {
       '${desktopBase}schedule-setup/staff-templates/';
   static const String vehicles =
       '${desktopBase}transport-masters/vehicle-creation/';
-  static const String users = '${desktopBase}user-creations/users-creation/';
+  // Unused — no call site references this constant. Left pointing at the
+  // renamed "staff-creations" prefix for consistency with registerStaffFcmToken
+  // above, but "users-creation" itself isn't among the screens currently
+  // registered there (only departments/designations/staffcreation are) —
+  // verify against app/urls/base_urls.py before wiring a real caller to this.
+  static const String users = '${desktopBase}staff-creations/users-creation/';
   static const String subproperties =
       '${desktopBase}waste-types/subproperties/';
   static const String wards = '${desktopBase}masters/panchayat/';

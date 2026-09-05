@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/network/permission_error.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/shared/services/notification_service.dart';
 import 'package:iwms_private_app/data/models/grievance_ticket_model.dart';
@@ -51,6 +52,10 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
   final _repo = SupervisorGrievanceRepository();
   List<GrievanceTicket> _tickets = [];
   bool _loading = true;
+
+  /// Why the last load failed, if it did. A silent catch here meant a
+  /// permission denial looked exactly like 'no grievances yet'.
+  String? _loadError;
   bool _busy = false;
   String _filter = 'all'; // all | raised | pending | escalated | resolved
   Timer? _poll;
@@ -78,11 +83,18 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
       setState(() {
         _tickets = list;
         _loading = false;
+        _loadError = null;
       });
       _knownIds = list.map((t) => t.uniqueId).toSet();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadError = describeRequestFailure(
+          error,
+          fallback: 'Could not load grievances. Pull down to try again.',
+        );
+      });
     }
   }
 
@@ -128,9 +140,10 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
       if (!mounted) return;
       AppFlash.success(context, '$label ✓');
       await _load();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      AppFlash.error(context, '$label failed');
+      AppFlash.error(
+          context, describeRequestFailure(error, fallback: '$label failed'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -287,10 +300,28 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
                             children: [
                               const SizedBox(height: 140),
                               Center(
-                                child: Text(
-                                  'No grievances here.',
-                                  style: TextStyle(
-                                    color: SupervisorTheme.mutedText,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      if (_loadError != null)
+                                        Icon(
+                                          Icons.lock_outline_rounded,
+                                          color: SupervisorTheme.mutedText,
+                                          size: 32,
+                                        ),
+                                      if (_loadError != null)
+                                        const SizedBox(height: 12),
+                                      Text(
+                                        _loadError ?? 'No grievances here.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: SupervisorTheme.mutedText,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),

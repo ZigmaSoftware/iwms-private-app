@@ -23,8 +23,11 @@ class SupervisorException implements Exception {
 class SupervisorRepository {
   static const String _assignments =
       '${ApiConfig.desktopBase}schedule-operations/daily-trip-assignments/';
+  // "staff-creations" — a dev merge renamed the backend's router group (and
+  // the underlying model package) from "user-creations"; this was left
+  // pointing at the old URL and 404'd on every call.
   static const String _staff =
-      '${ApiConfig.desktopBase}user-creations/staffcreation/';
+      '${ApiConfig.desktopBase}staff-creations/staffcreation/';
   static const String _staffTemplates =
       '${ApiConfig.desktopBase}schedule-setup/staff-templates/';
   static const String _tripLogs =
@@ -44,7 +47,7 @@ class SupervisorRepository {
   /// Fetch the requesting supervisor's authorised zone scope.
   ///
   /// The government backend has no zone-map concept (it's hierarchy/ward
-  /// based, not zone-based) — `user-creations/supervisor-zone-map/me/` was
+  /// based, not zone-based) — `staff-creations/supervisor-zone-map/me/` was
   /// removed there well before ward support was added, so this always
   /// resolves to an empty scope without a network round trip. Assignment
   /// loading proceeds via `mine=true` regardless (see [fetchAssignments]).

@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/di.dart';
@@ -44,6 +45,7 @@ class PushNotificationService {
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(alert: true, badge: true, sound: true);
+      await _resetTokenOnceForCurrentFirebaseProject(messaging);
 
       final token = await messaging.getToken();
       if (token != null) await _registerToken(token, registerUrl);
@@ -79,6 +81,25 @@ class PushNotificationService {
       debugPrint(
           '[push] Firebase not configured yet — push notifications disabled: $e');
       return false;
+    }
+  }
+
+  Future<void> _resetTokenOnceForCurrentFirebaseProject(
+    FirebaseMessaging messaging,
+  ) async {
+    try {
+      final options = Firebase.app().options;
+      final projectKey = options.messagingSenderId;
+      final prefs = await SharedPreferences.getInstance();
+      final resetKey = 'push.fcmTokenReset.$projectKey';
+      if (prefs.getBool(resetKey) == true) return;
+
+      await messaging.deleteToken();
+      _lastRegistrationFingerprint = null;
+      await prefs.setBool(resetKey, true);
+      debugPrint('[push] FCM token reset for Firebase project $projectKey.');
+    } catch (e) {
+      debugPrint('[push] FCM token reset skipped (non-fatal): $e');
     }
   }
 

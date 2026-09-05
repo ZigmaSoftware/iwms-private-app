@@ -76,6 +76,23 @@ class PermissionBundle extends Equatable {
   final Map<String, dynamic> columnPermissions;
   final List<Map<String, dynamic>> moduleAccess;
   final List<AppSurfaceAccess> appSurfaces;
+
+  /// Apps this user may sign into, e.g. `['supervisor']`. Empty means the
+  /// mobile sign-in was refused, so this should never be empty in the app.
+  final List<String> appModules;
+
+  /// Screens to render per app, keyed by module: `{'supervisor': ['supervisor.trips', ...]}`.
+  ///
+  /// The backend derives these from the same permissions the middleware
+  /// enforces, so a visible tab and a 403 cannot disagree. A screen appears
+  /// when its main list permission is granted; anything else it reads that
+  /// the user cannot see is hidden inside the screen instead.
+  final Map<String, List<String>> appScreens;
+
+  /// True when the backend explicitly sent the `app_screens` field. This lets
+  /// the app distinguish a modern strict response with zero screens from an old
+  /// backend that did not know about app-screen gating yet.
+  final bool receivedAppScreens;
   final PermissionLanding? landing;
   final String? permissionVersion;
   final String? generatedAt;
@@ -87,6 +104,9 @@ class PermissionBundle extends Equatable {
     required this.columnPermissions,
     required this.moduleAccess,
     required this.appSurfaces,
+    this.appModules = const [],
+    this.appScreens = const {},
+    this.receivedAppScreens = false,
     this.landing,
     this.permissionVersion,
     this.generatedAt,
@@ -99,6 +119,9 @@ class PermissionBundle extends Equatable {
         columnPermissions = const {},
         moduleAccess = const [],
         appSurfaces = const [],
+        appModules = const [],
+        appScreens = const {},
+        receivedAppScreens = false,
         landing = null,
         permissionVersion = null,
         generatedAt = null,
@@ -122,12 +145,35 @@ class PermissionBundle extends Equatable {
                 Map<String, dynamic>.from(json['landing'] as Map))
             : null;
 
+    final rawModules = (json['app_modules'] as List?)
+            ?.map((item) => item?.toString() ?? '')
+            .where((item) => item.isNotEmpty)
+            .toList() ??
+        const <String>[];
+
+    final rawScreens = <String, List<String>>{};
+    final screensJson = json['app_screens'];
+    final receivedScreens = json.containsKey('app_screens');
+    if (screensJson is Map) {
+      screensJson.forEach((key, value) {
+        if (value is List) {
+          rawScreens[key.toString()] = value
+              .map((item) => item?.toString() ?? '')
+              .where((item) => item.isNotEmpty)
+              .toList();
+        }
+      });
+    }
+
     return PermissionBundle(
       permissions: rawPermissions,
       permissionDetails: rawPermissionDetails,
       columnPermissions: rawColumnPermissions,
       moduleAccess: rawModuleAccess,
       appSurfaces: rawSurfaces,
+      appModules: rawModules,
+      appScreens: rawScreens,
+      receivedAppScreens: receivedScreens,
       landing: rawLanding,
       permissionVersion: json['permission_version']?.toString(),
       generatedAt: json['generated_at']?.toString(),
@@ -142,6 +188,9 @@ class PermissionBundle extends Equatable {
       'column_permissions': columnPermissions,
       'module_access': moduleAccess,
       'app_surfaces': appSurfaces.map((item) => item.toJson()).toList(),
+      'app_modules': appModules,
+      'app_screens': appScreens,
+      'received_app_screens': receivedAppScreens,
       'landing': landing?.toJson(),
       'permission_version': permissionVersion,
       'generated_at': generatedAt,
@@ -149,12 +198,41 @@ class PermissionBundle extends Equatable {
     };
   }
 
+  /// Whether [screenKey] (e.g. `supervisor.trips`) should be rendered.
+  ///
+  /// A user whose old backend bundle carries no `app_screens` field at all is
+  /// treated as allowed for compatibility. A modern strict backend sends the
+  /// field even when the answer is empty, and that must fail closed.
+  bool canSeeScreen(String screenKey) {
+    if (!receivedAppScreens) return true;
+
+    final target = _normalizeKey(screenKey);
+    for (final screens in appScreens.values) {
+      for (final granted in screens) {
+        if (_normalizeKey(granted) == target) return true;
+      }
+    }
+    return false;
+  }
+
+  /// Screens granted for one app, in backend order.
+  List<String> screensFor(String moduleKey) =>
+      appScreens[moduleKey] ?? const <String>[];
+
+  /// Whether the backend told us anything about screens. Screens that must
+  /// fail closed can check this before trusting [canSeeScreen].
+  bool get hasScreenData => receivedAppScreens;
+
   bool get isEmpty =>
       permissions.isEmpty &&
       permissionDetails.isEmpty &&
       columnPermissions.isEmpty &&
       moduleAccess.isEmpty &&
-      appSurfaces.isEmpty;
+      appSurfaces.isEmpty &&
+      appModules.isEmpty &&
+      permissionVersion == null &&
+      generatedAt == null &&
+      !receivedAppScreens;
 
   AppSurfaceAccess? get defaultSurface {
     if (appSurfaces.isEmpty) return null;
@@ -244,6 +322,9 @@ class PermissionBundle extends Equatable {
         columnPermissions,
         moduleAccess,
         appSurfaces,
+        appModules,
+        appScreens,
+        receivedAppScreens,
         landing,
         permissionVersion,
         generatedAt,
