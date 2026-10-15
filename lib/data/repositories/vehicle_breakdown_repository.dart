@@ -18,8 +18,8 @@ class VehicleBreakdownException implements Exception {
 /// "Vehicle breakdown" report/approve/reject flow — shared between the
 /// driver app (report a breakdown) and the supervisor app (approve/reject).
 class VehicleBreakdownRepository {
-  static const String driverRole = 'govt_panchayat_driver';
-  static const String operatorRole = 'govt_panchayat_operator';
+  static const String driverRole = 'Company Driver';
+  static const String operatorRole = 'Company Operator';
 
   String _fmtDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
@@ -50,13 +50,19 @@ class VehicleBreakdownRepository {
 
   Future<List<VehicleBreakdownOption>> fetchAvailableStaff(
     DateTime date,
-    String role,
-  ) async {
+    String role, {
+    String? breakdownId,
+  }) async {
     try {
       final dio = await authorizedDio();
       final res = await dio.get(
         ApiConfig.vehicleBreakdownAvailableStaff,
-        queryParameters: {'date': _fmtDate(date), 'role': role},
+        queryParameters: {
+          'date': _fmtDate(date),
+          'role': role,
+          if (breakdownId != null && breakdownId.isNotEmpty)
+            'breakdown_id': breakdownId,
+        },
       );
       return _rawList(res.data)
           .map(VehicleBreakdownOption.staffFromJson)
@@ -120,18 +126,39 @@ class VehicleBreakdownRepository {
 
   Future<List<VehicleBreakdownReport>> fetchBreakdowns({
     String? approvalStatus,
+    bool mine = false,
   }) async {
     try {
       final dio = await authorizedDio();
-      final res = await dio.get(
+      var res = await dio.get(
         ApiConfig.vehicleBreakdowns,
         queryParameters: {
+          if (mine) 'mine': 'true',
           if (approvalStatus != null) 'approval_status': approvalStatus,
         },
       );
-      return _rawList(res.data)
-          .map(VehicleBreakdownReport.fromJson)
-          .toList();
+      final rows = <Map<String, dynamic>>[];
+      final seenPages = <String>{};
+      while (true) {
+        if (res.data is! List &&
+            (res.data is! Map ||
+                (res.data['results'] is! List && res.data['data'] is! List))) {
+          throw const FormatException('Invalid reports response');
+        }
+        rows.addAll(_rawList(res.data));
+        final next = res.data is Map ? res.data['next'] : null;
+        if (next == null || next == '') break;
+        if (!seenPages.add(next.toString())) {
+          throw const FormatException('Repeated reports page');
+        }
+        final current = Uri.parse(ApiConfig.vehicleBreakdowns);
+        final url = current.resolve(next.toString());
+        if (url.origin != current.origin) {
+          throw const FormatException('Invalid reports page');
+        }
+        res = await dio.get(url.toString());
+      }
+      return rows.map(VehicleBreakdownReport.fromJson).toList();
     } on DioException catch (e) {
       throw VehicleBreakdownException(_message(e));
     } catch (e) {
@@ -164,7 +191,8 @@ class VehicleBreakdownRepository {
     }
   }
 
-  Future<void> reject(String uniqueId, {required String rejectionRemarks}) async {
+  Future<void> reject(String uniqueId,
+      {required String rejectionRemarks}) async {
     try {
       final dio = await authorizedDio();
       await dio.patch(
@@ -197,8 +225,41 @@ class VehicleBreakdownRepository {
 
   String _message(DioException e) {
     final data = e.response?.data;
-    if (data is Map && data['detail'] != null) return data['detail'].toString();
-    if (data is Map && data['error'] != null) return data['error'].toString();
+    final serverMessage = _validationMessage(data);
+    if (serverMessage != null && serverMessage.isNotEmpty) return serverMessage;
     return e.message ?? 'Network error';
+  }
+
+  String? _validationMessage(dynamic value, [String? field]) {
+    if (value == null) return null;
+    if (value is String) {
+      final label = field
+          ?.replaceAll('_', ' ')
+          .split(' ')
+          .where((part) => part.isNotEmpty)
+          .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+          .join(' ');
+      return label == null ? value : '$label: $value';
+    }
+    if (value is List) {
+      final messages = value
+          .map((item) => _validationMessage(item, field))
+          .whereType<String>()
+          .where((message) => message.isNotEmpty)
+          .toList();
+      return messages.isEmpty ? null : messages.join('\n');
+    }
+    if (value is Map) {
+      for (final key in const ['detail', 'error', 'message']) {
+        if (value[key] != null) return _validationMessage(value[key]);
+      }
+      final messages = <String>[];
+      for (final entry in value.entries) {
+        final message = _validationMessage(entry.value, entry.key.toString());
+        if (message != null && message.isNotEmpty) messages.add(message);
+      }
+      return messages.isEmpty ? null : messages.join('\n');
+    }
+    return value.toString();
   }
 }

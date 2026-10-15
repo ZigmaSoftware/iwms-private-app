@@ -12,7 +12,7 @@ class StaffManagementRepository {
     try {
       final dio = await authorizedDio();
       final response = await dio.get(
-        '${ApiConfig.desktopBase}user-creation/users-creation/',
+        ApiConfig.users,
       );
 
       final List items = response.data is List

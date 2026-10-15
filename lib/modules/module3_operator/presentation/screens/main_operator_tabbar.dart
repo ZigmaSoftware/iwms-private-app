@@ -241,7 +241,6 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
       OperatorNavItem(
         icon: Icons.fact_check_rounded,
         label: localizations.operatorNavAttendance,
-        blink: true,
       ),
       OperatorNavItem(
         icon: Icons.person_rounded,

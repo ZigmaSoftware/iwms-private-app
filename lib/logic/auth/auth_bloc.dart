@@ -4,6 +4,7 @@ import 'package:iwms_private_app/data/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
+import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository _authRepository;
@@ -59,9 +60,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       requireOnline: _authRepository.requiresLiveBackend(user.role),
     );
     if (refreshedUser == null) {
+      await BluetoothService().disconnect();
       await _authRepository.logout();
       emit(const AuthStateUnauthenticated());
       return;
+    }
+
+    if (UserModel.normalizeRole(refreshedUser.role) == 'citizen' ||
+        UserModel.normalizeRole(refreshedUser.role) == 'customer') {
+      await BluetoothService().disconnect();
     }
 
     emit(_authenticatedStateFromUser(refreshedUser));
@@ -103,6 +110,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         password: event.password,
       );
 
+      await BluetoothService().disconnect();
       emit(_authenticatedStateFromUser(user));
     } catch (e) {
       emit(AuthStateFailure(message: e.toString()));
@@ -165,6 +173,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    await BluetoothService().disconnect();
     await _authRepository.logout();
     emit(const AuthStateUnauthenticated());
   }

@@ -118,6 +118,12 @@ class _SupervisorVehiclesScreenState extends State<SupervisorVehiclesScreen> {
     );
   }
 
+  /// Every vehicle under this supervisor, from [_vehiclesByNo] — the
+  /// company-scoped roster the backend returns regardless of whether a trip
+  /// plan exists today. [assignments] only enriches a vehicle that has one:
+  /// crew, waste weights, trip count. A vehicle with no assignment today
+  /// still gets a card, just with zeroed trip stats and no crew — it must
+  /// not vanish because nothing is scheduled for it yet.
   List<_VehicleCardData> _buildItems(List<SupervisorAssignment> assignments) {
     final grouped = <String, List<SupervisorAssignment>>{};
     for (final assignment in assignments) {
@@ -126,37 +132,55 @@ class _SupervisorVehiclesScreenState extends State<SupervisorVehiclesScreen> {
       grouped.putIfAbsent(vehicleNo, () => []).add(assignment);
     }
 
-    final items = grouped.entries.map((entry) {
-      final vehicleNo = entry.key;
+    // The roster is the union of every fetched vehicle and every vehicle
+    // seen on a trip today (a trip can reference a vehicle the roster fetch
+    // missed, e.g. one added after the roster call raced the trip create).
+    final vehicleNos = <String>{..._vehiclesByNo.keys, ...grouped.keys};
+
+    final items = vehicleNos.map((vehicleNo) {
       final vehicle = _vehiclesByNo[vehicleNo];
-      final trips = entry.value;
-      final mapAssignment = trips.firstWhere(
-        (assignment) => assignment.isInProgress,
-        orElse: () => trips.first,
-      );
+      final trips = grouped[vehicleNo] ?? const <SupervisorAssignment>[];
+
+      SupervisorAssignment? mapAssignment;
       double binWeight = 0;
       double householdWeight = 0;
       final areas = <String>{};
       final binStops = <_VehicleStopDetail>[];
       final householdStops = <_VehicleStopDetail>[];
-      for (final assignment in trips) {
-        areas.add(assignment.areaName);
-        for (final stop in assignment.stops) {
-          final detail = _VehicleStopDetail(
-            assignmentId: assignment.uniqueId,
-            assignmentName: assignment.areaName,
-            tripCode: assignment.tripCode,
-            stop: stop,
-          );
-          final weight = stop.collectedWeightKg ?? 0;
-          if (stop.isHousehold) {
-            householdWeight += weight;
-            householdStops.add(detail);
-          } else {
-            binWeight += weight;
-            binStops.add(detail);
+      if (trips.isNotEmpty) {
+        mapAssignment = trips.firstWhere(
+          (assignment) => assignment.isInProgress,
+          orElse: () => trips.first,
+        );
+        for (final assignment in trips) {
+          areas.add(assignment.areaName);
+          for (final stop in assignment.stops) {
+            final detail = _VehicleStopDetail(
+              assignmentId: assignment.uniqueId,
+              assignmentName: assignment.areaName,
+              tripCode: assignment.tripCode,
+              stop: stop,
+            );
+            final weight = stop.collectedWeightKg ?? 0;
+            if (stop.isHousehold) {
+              householdWeight += weight;
+              householdStops.add(detail);
+            } else {
+              binWeight += weight;
+              binStops.add(detail);
+            }
           }
         }
+        trips.sort((a, b) {
+          if (a.isInProgress && !b.isInProgress) return -1;
+          if (!a.isInProgress && b.isInProgress) return 1;
+          final dateA = a.tripDate;
+          final dateB = b.tripDate;
+          if (dateA == null && dateB == null) return 0;
+          if (dateA == null) return 1;
+          if (dateB == null) return -1;
+          return dateA.compareTo(dateB);
+        });
       }
       final locationText = vehicle?.locationLabel ??
           (areas.isEmpty
@@ -164,16 +188,6 @@ class _SupervisorVehiclesScreenState extends State<SupervisorVehiclesScreen> {
               : areas.length == 1
                   ? areas.first
                   : '${areas.first} +${areas.length - 1}');
-      trips.sort((a, b) {
-        if (a.isInProgress && !b.isInProgress) return -1;
-        if (!a.isInProgress && b.isInProgress) return 1;
-        final dateA = a.tripDate;
-        final dateB = b.tripDate;
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-        return dateA.compareTo(dateB);
-      });
       return _VehicleCardData(
         vehicleNo: vehicleNo,
         vehicleType: vehicle?.vehicleTypeName ?? '',
@@ -186,9 +200,9 @@ class _SupervisorVehiclesScreenState extends State<SupervisorVehiclesScreen> {
         householdWeightKg: householdWeight,
         binStops: binStops,
         householdStops: householdStops,
-        crew: mapAssignment.crew,
-        driverName: mapAssignment.driverName,
-        operatorName: mapAssignment.operatorName,
+        crew: mapAssignment?.crew,
+        driverName: mapAssignment?.driverName ?? '',
+        operatorName: mapAssignment?.operatorName ?? '',
       );
     }).toList()
       ..sort((a, b) => a.vehicleNo.compareTo(b.vehicleNo));

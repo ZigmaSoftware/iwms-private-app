@@ -8,12 +8,14 @@ class OperatorTripPanchayat {
   final String name;
   final double? latitude;
   final double? longitude;
+  final String? zoneName;
 
   const OperatorTripPanchayat({
     required this.uniqueId,
     required this.name,
     this.latitude,
     this.longitude,
+    this.zoneName,
   });
 
   factory OperatorTripPanchayat.fromJson(Map<String, dynamic> json) {
@@ -22,6 +24,7 @@ class OperatorTripPanchayat {
       name: json['name']?.toString() ?? '',
       latitude: _parseDouble(json['latitude']),
       longitude: _parseDouble(json['longitude']),
+      zoneName: json['zone_name']?.toString(),
     );
   }
 }
@@ -282,6 +285,25 @@ class OperatorTripHouseholdStop {
   /// [_HouseholdTile] in captain_home_tab.dart.
   final List<WasteBreakdownEntry> wasteBreakdown;
 
+  /// Proof photo the driver captured for this collection, if any (best
+  /// effort — a household visit with several waste-type rows only carries
+  /// one representative photo through to here). Absolute URL, shown as an
+  /// expandable image alongside [wasteBreakdown] in the same eye-button
+  /// popup.
+  final String? collectionImageUrl;
+
+  /// When the customer tapped "I'm home now" in the citizen app after this
+  /// stop was marked Collect Later — shown as an "Available now" badge.
+  final DateTime? customerAvailableAt;
+  final String? customerAvailableNote;
+
+  /// Still waiting for the crew and the customer says they're home.
+  bool get customerWaiting =>
+      customerAvailableAt != null &&
+      !isCollected &&
+      const {'collect later', 'skipped', 'pending'}
+          .contains(status.toLowerCase());
+
   const OperatorTripHouseholdStop({
     required this.uniqueId,
     required this.sequence,
@@ -297,6 +319,9 @@ class OperatorTripHouseholdStop {
     this.latitude,
     this.longitude,
     this.wasteBreakdown = const [],
+    this.collectionImageUrl,
+    this.customerAvailableAt,
+    this.customerAvailableNote,
   });
 
   factory OperatorTripHouseholdStop.fromJson(Map<String, dynamic> json) {
@@ -322,6 +347,9 @@ class OperatorTripHouseholdStop {
                 Map<String, dynamic>.from(e as Map),
               ))
           .toList(),
+      collectionImageUrl: json['collection_image_url']?.toString(),
+      customerAvailableAt: _parseDate(json['customer_available_at']),
+      customerAvailableNote: json['customer_available_note']?.toString(),
     );
   }
 }
@@ -371,13 +399,20 @@ class OperatorTripProgress {
 class OperatorTripWard {
   final String uniqueId;
   final String name;
+  // Null when this ward belongs to a Panchayat instead of a Zone.
+  final String? zoneName;
 
-  const OperatorTripWard({required this.uniqueId, required this.name});
+  const OperatorTripWard({
+    required this.uniqueId,
+    required this.name,
+    this.zoneName,
+  });
 
   factory OperatorTripWard.fromJson(Map<String, dynamic> json) {
     return OperatorTripWard(
       uniqueId: json['unique_id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+      zoneName: json['zone_name']?.toString(),
     );
   }
 }
@@ -393,6 +428,7 @@ class OperatorTripRetripRequest {
   final int pendingBinCount;
   final int pendingHouseholdCount;
   final DateTime? createdAt;
+  final DateTime? expiresAt;
 
   const OperatorTripRetripRequest({
     required this.uniqueId,
@@ -401,7 +437,21 @@ class OperatorTripRetripRequest {
     this.pendingBinCount = 0,
     this.pendingHouseholdCount = 0,
     this.createdAt,
+    this.expiresAt,
   });
+
+  Duration? remaining([DateTime? now]) {
+    if (expiresAt == null) return null;
+    final value = expiresAt!.difference(now ?? DateTime.now());
+    return value.isNegative ? Duration.zero : value;
+  }
+
+  String expiryLabel([DateTime? now]) {
+    final value = remaining(now);
+    if (value == null) return '';
+    if (value == Duration.zero) return 'Request expired - refresh to continue';
+    return 'Expires in ${(value.inSeconds / 60).ceil()} min';
+  }
 
   factory OperatorTripRetripRequest.fromJson(Map<String, dynamic> json) {
     return OperatorTripRetripRequest(
@@ -411,6 +461,7 @@ class OperatorTripRetripRequest {
       pendingBinCount: _parseInt(json['pending_bin_count']) ?? 0,
       pendingHouseholdCount: _parseInt(json['pending_household_count']) ?? 0,
       createdAt: _parseDate(json['created_at']),
+      expiresAt: _parseDate(json['expires_at']),
     );
   }
 }
@@ -445,6 +496,8 @@ class OperatorTripToday {
   final String? collectionType;
   // Household stops (customers) for household/bulk trips. Empty for bin trips.
   final List<OperatorTripHouseholdStop> householdCollections;
+  // Top-level zone name from the API (used when ward/panchayat don't have it)
+  final String? zoneName;
 
   const OperatorTripToday({
     required this.assignmentUniqueId,
@@ -470,7 +523,12 @@ class OperatorTripToday {
     this.actualEndAt,
     this.retripRequest,
     this.crew,
+    this.zoneName,
   });
+
+  /// Zone name for display — checks ward, then panchayat, then top-level zone.
+  String get effectiveZoneName =>
+      ward?.zoneName ?? panchayat?.zoneName ?? zoneName ?? '—';
 
   /// Returns a copy of this trip with a different set of collection points
   /// (used to apply a route-order re-sequence shared by the list and the map).
@@ -500,6 +558,7 @@ class OperatorTripToday {
         actualEndAt: actualEndAt,
         retripRequest: retripRequest,
         crew: crew,
+        zoneName: zoneName,
       );
 
   /// Display name for the trip's service area (ward, falling back to
@@ -677,6 +736,9 @@ class OperatorTripToday {
               Map<String, dynamic>.from(json['crew'] as Map),
             )
           : null,
+      zoneName: json['zone'] is Map
+          ? (json['zone'] as Map)['zone_name']?.toString()
+          : json['zone_name']?.toString(),
     );
   }
 }
@@ -1247,4 +1309,28 @@ DateTime? _timeToToday(String? raw, DateTime baseDate) {
     ss = int.tryParse(secPart) ?? 0;
   }
   return DateTime(baseDate.year, baseDate.month, baseDate.day, hh, mm, ss);
+}
+
+class OperatorServiceNotice {
+  const OperatorServiceNotice({
+    required this.uniqueId,
+    required this.planCode,
+    required this.reasonLabel,
+    required this.reasonText,
+  });
+
+  final String uniqueId;
+  final String planCode;
+  final String reasonLabel;
+  final String reasonText;
+  String get explanation =>
+      reasonText.trim().isNotEmpty ? reasonText.trim() : reasonLabel;
+
+  factory OperatorServiceNotice.fromJson(Map<String, dynamic> json) =>
+      OperatorServiceNotice(
+        uniqueId: json['unique_id']?.toString() ?? '',
+        planCode: json['trip_plan_code']?.toString() ?? 'Assigned route',
+        reasonLabel: json['reason_label']?.toString() ?? 'Operational issue',
+        reasonText: json['reason_text']?.toString() ?? '',
+      );
 }

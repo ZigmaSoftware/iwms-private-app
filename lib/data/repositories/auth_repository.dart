@@ -10,7 +10,6 @@ import 'package:iwms_private_app/modules/module3_operator/offline/offline_login.
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_private_app/core/api_config.dart';
-import 'package:iwms_private_app/core/env.dart';
 import 'package:iwms_private_app/data/models/permission_bundle.dart';
 import 'package:iwms_private_app/data/models/user_model.dart';
 
@@ -141,7 +140,7 @@ class AuthRepository {
     }
 
     try {
-      final user = await _loginOnline(
+      final user = await _loginMobileCitizen(
         sanitizedUsername,
         sanitizedPassword,
       );
@@ -177,53 +176,6 @@ class AuthRepository {
     } catch (error, stackTrace) {
       _logError('Unexpected login failure', error, stackTrace);
       throw AuthRepositoryException("Login failed. Please try again.");
-    }
-  }
-
-  Future<UserModel> _loginOnline(String username, String password) async {
-    if (kEnforcePermissions) {
-      return _loginDesktopStaff(username, password);
-    }
-    return _loginMobileCitizen(username, password);
-  }
-
-  Future<UserModel> _loginDesktopStaff(String username, String password) async {
-    try {
-      final response = await _dio.post(
-        ApiConfig.staffLogin,
-        data: {
-          "username": username,
-          "password": password,
-          "login_type": "staff",
-          // Identifies this as the mobile app so the backend applies the App
-          // Module gate. A web sign-in sends no client and is never gated.
-          "client": "mobile",
-        },
-      );
-
-      final data = response.data;
-      if (data is! Map<String, dynamic>) {
-        throw AuthRepositoryException("Invalid response from staff login.");
-      }
-
-      final requiredKeys = ["unique_id", "name", "role", "access_token"];
-      final missing = requiredKeys.where((key) => data[key] == null).toList();
-      if (missing.isNotEmpty) {
-        throw AuthRepositoryException("Incomplete staff login payload.");
-      }
-
-      final permissions = data["permissions"] is Map<String, dynamic>
-          ? data["permissions"]
-          : null;
-      final user = UserModel.fromApi({
-        ...data,
-        "permissions": permissions,
-      });
-      return user;
-    } on DioException catch (dioError, stackTrace) {
-      final message = _handleDioError(dioError);
-      _logError('Staff login failed', dioError, stackTrace);
-      throw AuthRepositoryException(message);
     }
   }
 

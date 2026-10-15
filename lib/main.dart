@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -74,6 +76,7 @@ class _PermissionRefreshOnResumeState extends State<_PermissionRefreshOnResume>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       context.read<AuthBloc>().add(AuthPermissionsRefreshRequested());
+      unawaited(PushNotificationService.instance.refreshRegistration());
     }
   }
 
@@ -102,25 +105,28 @@ class MyApp extends StatelessWidget {
       child: _PermissionRefreshOnResume(
         child: BlocBuilder<ThemeCubit, ThemeMode>(
           builder: (context, themeMode) {
-            return MaterialApp.router(
-              debugShowCheckedModeBanner: false,
-              title: 'IWMS',
-              localizationsDelegates: const [
-                AppLocalizations.delegate,
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-              ],
-              supportedLocales: const [
-                Locale('en'),
-                Locale('hi'),
-                Locale('ta'),
-              ],
-              theme: AppTheme.lightTheme,
-              darkTheme: AppTheme.darkTheme,
-              themeMode: themeMode,
-              routerConfig: appRouter,
-            );
+            return BlocBuilder<LocaleCubit, Locale>(builder: (context, locale) {
+              return MaterialApp.router(
+                debugShowCheckedModeBanner: false,
+                title: 'IWMS',
+                localizationsDelegates: const [
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                supportedLocales: const [
+                  Locale('en'),
+                  Locale('hi'),
+                  Locale('ta'),
+                ],
+                theme: AppTheme.lightTheme,
+                darkTheme: AppTheme.darkTheme,
+                themeMode: themeMode,
+                locale: locale,
+                routerConfig: appRouter,
+              );
+            });
           },
         ),
       ),

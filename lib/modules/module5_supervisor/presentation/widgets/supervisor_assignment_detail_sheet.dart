@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_trip_map_screen.dart';
@@ -66,6 +67,84 @@ class SupervisorAssignmentDetailSheet extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _crewRow(),
+                  const SizedBox(height: 12),
+                  _row(
+                      Icons.event,
+                      'Service date',
+                      assignment.tripDate == null
+                          ? 'Unavailable'
+                          : DateFormat('d MMM yyyy')
+                              .format(assignment.tripDate!)),
+                  _row(
+                      Icons.schedule,
+                      'Scheduled',
+                      assignment.scheduledTime.isEmpty
+                          ? 'Not recorded'
+                          : assignment.scheduledTime),
+                  _row(
+                      Icons.play_circle_outline,
+                      'Started',
+                      assignment.actualStartAt == null
+                          ? (assignment.actualStartTime.isEmpty
+                              ? 'Not recorded'
+                              : assignment.actualStartTime)
+                          : DateFormat('d MMM, HH:mm')
+                              .format(assignment.actualStartAt!.toLocal())),
+                  _row(
+                      Icons.stop_circle_outlined,
+                      'Ended',
+                      assignment.actualEndAt == null
+                          ? (assignment.actualEndTime.isEmpty
+                              ? 'Not recorded'
+                              : assignment.actualEndTime)
+                          : DateFormat('d MMM, HH:mm')
+                              .format(assignment.actualEndAt!.toLocal())),
+                  if (assignment.totalTripTimeSeconds != null)
+                    _row(Icons.timer_outlined, 'Trip duration',
+                        '${assignment.totalTripTimeSeconds! ~/ 3600}h ${(assignment.totalTripTimeSeconds! ~/ 60) % 60}m'),
+                  _row(Icons.route_outlined, 'Collection outcome',
+                      '${assignment.collectedCount} collected · ${assignment.unavailableCount} unavailable / missed · ${assignment.unresolvedCount} unresolved'),
+                  _row(Icons.scale_outlined, 'Recorded waste',
+                      '${assignment.totalCollectedWeightKg.toStringAsFixed(1)} kg'),
+                  if (assignment.staffSource == 'alternative')
+                    _row(Icons.people_outline, 'Staff',
+                        'Substitute crew assigned'),
+                  if (!assignment.isRemaining ||
+                      assignment.tripLogSummary.isNotEmpty)
+                    _row(
+                        Icons.fact_check_outlined,
+                        'Collection log',
+                        assignment.tripLogSummary.isEmpty
+                            ? 'No collection log recorded'
+                            : assignment.tripLogSummary['status']?.toString() ??
+                                'Unverified'),
+                  if (assignment.tripLogSummary['verified_at'] != null)
+                    _row(Icons.verified_outlined, 'Verified',
+                        '${assignment.tripLogSummary['verified_by'] ?? ''} · ${_eventTime(assignment.tripLogSummary['verified_at'])}'),
+                  if (assignment.breakdownInfo.isNotEmpty) ...[
+                    _row(Icons.car_repair, 'Vehicle breakdown',
+                        '${assignment.breakdownInfo['breakdown_reason'] ?? ''} · ${assignment.breakdownInfo['approval_status'] ?? ''}'),
+                    if (assignment.breakdownInfo['replacement_vehicle_no'] !=
+                        null)
+                      _row(
+                          Icons.local_shipping_outlined,
+                          'Replacement vehicle',
+                          assignment.breakdownInfo['replacement_vehicle_no']
+                              .toString()),
+                  ],
+                  for (final event in assignment.tripEvents)
+                    _row(
+                        Icons.history,
+                        event['label']?.toString() ?? 'Trip event',
+                        [
+                          if (event['at'] != null) _eventTime(event['at']),
+                          event['actor'],
+                          event['detail'],
+                          if (event['related_trip_id'] != null)
+                            'Related trip: ${event['related_trip_id']}'
+                        ]
+                            .where((v) => v != null && v.toString().isNotEmpty)
+                            .join(' · ')),
                   const SizedBox(height: 16),
                   if (assignment.remarks.isNotEmpty) ...[
                     _row(Icons.notes_rounded, 'Remarks', assignment.remarks),
@@ -105,7 +184,8 @@ class SupervisorAssignmentDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _header(BuildContext context, List<SupervisorStop> stops, int collectedCount) {
+  Widget _header(
+      BuildContext context, List<SupervisorStop> stops, int collectedCount) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -145,29 +225,37 @@ class SupervisorAssignmentDetailSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        IconButton(
-          tooltip: 'View on map',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SupervisorTripMapScreen(
-                  assignmentId: assignment.uniqueId,
-                  title: assignment.areaName,
-                  driverName: assignment.driverName,
-                  vehicleNo: assignment.vehicleNo,
-                  tripDate: assignment.tripDate,
+        if (assignment.isRemaining)
+          IconButton(
+            tooltip: 'View on map',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SupervisorTripMapScreen(
+                    assignmentId: assignment.uniqueId,
+                    title: assignment.areaName,
+                    driverName: assignment.driverName,
+                    vehicleNo: assignment.vehicleNo,
+                    tripDate: assignment.tripDate,
+                  ),
                 ),
-              ),
-            );
-          },
-          icon: const Icon(
-            Icons.map_outlined,
-            color: SupervisorTheme.accent,
+              );
+            },
+            icon: const Icon(
+              Icons.map_outlined,
+              color: SupervisorTheme.accent,
+            ),
           ),
-        ),
         if (stops.isNotEmpty) _progressRing(collectedCount, stops.length),
       ],
     );
+  }
+
+  String _eventTime(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '');
+    return date == null
+        ? 'Time not recorded'
+        : DateFormat('d MMM, HH:mm').format(date.toLocal());
   }
 
   Widget _badge(String label, Color color) {
@@ -507,13 +595,33 @@ class _StopTile extends StatelessWidget {
     } else {
       text = tone == _StopTone.current ? 'Next up' : 'Pending';
     }
-    return Text(
+    final line = Text(
       text,
       style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: _toneColor,
       ),
+    );
+    final availableAt = stop.customerAvailableAt;
+    if (availableAt == null || stop.isCollected) return line;
+    // The customer tapped "I'm home now" in the citizen app.
+    final waiting = stop.customerWaiting;
+    final note = (stop.customerAvailableNote ?? '').trim();
+    final color = waiting ? SupervisorTheme.success : SupervisorTheme.danger;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        line,
+        const SizedBox(height: 3),
+        Text(
+          '${waiting ? 'Customer home now' : 'Customer said they were home'}'
+          ' • ${_formatTime(availableAt.toLocal())}'
+          '${note.isEmpty ? '' : ' • "$note"'}',
+          style: TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w700, color: color),
+        ),
+      ],
     );
   }
 

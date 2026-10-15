@@ -1,11 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/shared/services/collection_photo_proof_service.dart';
+import 'package:iwms_private_app/shared/widgets/collection_photo_permission_dialog.dart';
 
 /// Modal sheet for confirming a bin collection.
 ///
@@ -23,6 +28,9 @@ class BinDetailSheet extends StatefulWidget {
 class _BinDetailSheetState extends State<BinDetailSheet> {
   final TextEditingController _weightCtrl = TextEditingController();
   final TextEditingController _notesCtrl = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  final CollectionPhotoProofService _proofService =
+      const CollectionPhotoProofService();
 
   /// Notes are collapsed until asked for — see the build method.
   bool _notesOpen = false;
@@ -122,15 +130,24 @@ class _BinDetailSheetState extends State<BinDetailSheet> {
       _errorMessage = null;
     });
 
-    final location = await _currentLocation();
+    CollectionPhotoProof? proof;
+    if (action == 'not_available') {
+      proof = await _captureNotAvailableProof();
+      if (proof == null) {
+        if (mounted) setState(() => _statusSubmitting = false);
+        return;
+      }
+    }
+    final location = proof == null ? await _currentLocation() : null;
     try {
       final result = await _repo.scanBin(
         binQr: widget.validation.bin.scanValue,
         action: action,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
+        latitude: proof?.latitude ?? location?.latitude,
+        longitude: proof?.longitude ?? location?.longitude,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         statusReason: reason.trim(),
+        evidenceImage: proof?.file,
       );
       if (!mounted) return;
       Navigator.of(context).pop(result);
@@ -146,6 +163,40 @@ class _BinDetailSheetState extends State<BinDetailSheet> {
         _statusSubmitting = false;
         _errorMessage = 'Could not save status. Please try again.';
       });
+    }
+  }
+
+  Future<CollectionPhotoProof?> _captureNotAvailableProof() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    try {
+      await _proofService.ensureCaptureReady();
+      final captured = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 88,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+      if (captured == null) return null;
+      final assignmentId =
+          widget.validation.assignment['unique_id']?.toString();
+      return _proofService.stamp(
+        source: File(captured.path),
+        wasteType:
+            '${widget.validation.bin.wasteType?.name ?? 'BIN'} - NOT AVAILABLE',
+        stopLabel: widget.validation.collectionPoint.name,
+        assignmentId: assignmentId,
+      );
+    } on CollectionPhotoProofException catch (e) {
+      if (mounted) await handleCollectionPhotoProofFailure(context, e);
+      return null;
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Could not prepare the photo. Please retake it.';
+        });
+      }
+      return null;
     }
   }
 
@@ -536,7 +587,7 @@ class _WeightField extends StatelessWidget {
       decoration: InputDecoration(
         // Says out loud that the field can be left alone, so a driver
         // with no scale isn't hunting for a way past it.
-        hintText: 'e.g. 42.5  ·  leave blank if not weighed',
+        hintText: 'Enter weight',
         hintStyle: TextStyle(
           color: CaptainTheme.mutedText,
           fontWeight: FontWeight.w500,

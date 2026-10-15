@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 
 import 'package:iwms_private_app/core/api_config.dart';
@@ -33,23 +35,25 @@ class TripDelayRepository {
     required String assignmentId,
     required String reason,
     required String remarks,
+    required File evidenceImage,
+    required double latitude,
+    required double longitude,
     int? estimatedMinutes,
-    double? latitude,
-    double? longitude,
   }) async {
     final dio = await authorizedDio();
     try {
       await dio.post(
         ApiConfig.tripDelayReports,
-        data: {
+        data: FormData.fromMap({
           'trip_assignment_id': assignmentId,
           'delay_reason': reason,
           'delay_remarks': remarks,
+          'evidence_image': await MultipartFile.fromFile(evidenceImage.path),
           if (estimatedMinutes != null)
             'estimated_delay_minutes': estimatedMinutes,
-          if (latitude != null) 'delay_lat': latitude.toStringAsFixed(7),
-          if (longitude != null) 'delay_lng': longitude.toStringAsFixed(7),
-        },
+          'delay_lat': latitude.toStringAsFixed(7),
+          'delay_lng': longitude.toStringAsFixed(7),
+        }),
       );
     } on DioException catch (e) {
       throw Exception(_message(e));

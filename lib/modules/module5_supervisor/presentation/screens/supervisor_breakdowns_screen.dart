@@ -38,7 +38,7 @@ class _SupervisorBreakdownsScreenState
       _error = null;
     });
     try {
-      final reports = await _repo.fetchBreakdowns();
+      final reports = await _repo.fetchBreakdowns(mine: true);
       if (!mounted) return;
       setState(() {
         _reports = reports;
@@ -458,10 +458,16 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
       final today = DateTime.now();
       final results = await Future.wait([
         widget.repo.fetchAvailableVehicles(today),
-        widget.repo
-            .fetchAvailableStaff(today, VehicleBreakdownRepository.driverRole),
         widget.repo.fetchAvailableStaff(
-            today, VehicleBreakdownRepository.operatorRole),
+          today,
+          VehicleBreakdownRepository.driverRole,
+          breakdownId: widget.report.uniqueId,
+        ),
+        widget.repo.fetchAvailableStaff(
+          today,
+          VehicleBreakdownRepository.operatorRole,
+          breakdownId: widget.report.uniqueId,
+        ),
       ]);
       if (!mounted) return;
       setState(() {
@@ -653,8 +659,21 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
                       child: Text(d.label, overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
-            onChanged: (v) => setState(() => _replacementDriverId = v),
+            onChanged: _drivers.isEmpty
+                ? null
+                : (v) => setState(() => _replacementDriverId = v),
           ),
+          if (_drivers.isEmpty) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'No available drivers reporting to you',
+              style: TextStyle(
+                color: SupervisorTheme.danger,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
             value: _replacementOperatorId,
@@ -667,8 +686,21 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
                       child: Text(o.label, overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
-            onChanged: (v) => setState(() => _replacementOperatorId = v),
+            onChanged: _operators.isEmpty
+                ? null
+                : (v) => setState(() => _replacementOperatorId = v),
           ),
+          if (_operators.isEmpty) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'No available operators reporting to you',
+              style: TextStyle(
+                color: SupervisorTheme.danger,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           TextField(
             controller: _remarksController,

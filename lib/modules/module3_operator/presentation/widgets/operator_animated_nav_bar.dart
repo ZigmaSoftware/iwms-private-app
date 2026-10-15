@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
-import 'package:iwms_private_app/modules/module3_operator/utils/attendance_blink_store.dart';
 
 /// PhonePe-style notched bottom navigation bar with 4 tabs (icon + label
 /// stacked vertically, always visible) and a floating green QR action
@@ -63,12 +62,10 @@ class OperatorNavItem {
   const OperatorNavItem({
     required this.icon,
     required this.label,
-    this.blink = false,
   });
 
   final IconData icon;
   final String label;
-  final bool blink;
 }
 
 class _AnimatedNavTab extends StatelessWidget {
@@ -147,41 +144,7 @@ class _TabIcon extends StatelessWidget {
       child: Icon(item.icon, color: color, size: 22),
     );
 
-    if (!item.blink) return icon;
-
-    return ValueListenableBuilder<bool>(
-      valueListenable: AttendanceBlinkStore.notifier,
-      builder: (context, isBlinking, _) {
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            icon,
-            if (isBlinking)
-              Positioned(
-                right: -3,
-                top: -3,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: OperatorTheme.attendanceAlert,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: OperatorTheme.attendanceAlert
-                            .withValues(alpha: 0.6),
-                        blurRadius: 4,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
+    return icon;
   }
 }
 

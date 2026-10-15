@@ -27,7 +27,8 @@ import 'package:iwms_private_app/modules/module3_operator/offline/pending_record
 import 'package:iwms_private_app/modules/module3_operator/services/bluetooth_permissons.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/generateunique_id.dart';
-import 'package:iwms_private_app/modules/module3_operator/services/image_compress_service.dart';
+import 'package:iwms_private_app/shared/services/collection_photo_proof_service.dart';
+import 'package:iwms_private_app/shared/widgets/collection_photo_permission_dialog.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import 'package:iwms_private_app/core/api_config.dart';
@@ -235,9 +236,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         if (data is Map) {
           final assignmentMap = Map<String, dynamic>.from(data);
           area = _readWardName(assignmentMap['wards_detail']);
-          area = area.isNotEmpty
-              ? area
-              : _readDisplayName(assignmentMap['ward']);
+          area =
+              area.isNotEmpty ? area : _readDisplayName(assignmentMap['ward']);
           area = area.isNotEmpty
               ? area
               : _readDisplayName(assignmentMap['panchayat']);
@@ -692,8 +692,12 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         ..fields['waste_type'] = wasteTypeId
         ..fields['waste_type_id'] = wasteTypeId
         ..fields['weight'] = weight
-        ..fields['latitude'] = widget.latitude
-        ..fields['longitude'] = widget.longitude;
+        ..fields['latitude'] =
+            (data['captureLatitude'] as double?)?.toStringAsFixed(6) ??
+                widget.latitude
+        ..fields['longitude'] =
+            (data['captureLongitude'] as double?)?.toStringAsFixed(6) ??
+                widget.longitude;
 
       if (isUpdate && uniqueId != null) {
         request.fields['unique_id'] = uniqueId;
@@ -1582,29 +1586,60 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   Future<void> _captureWastePhoto(
       String type, Map<String, dynamic> item) async {
-    final picked = await _picker.pickImage(source: ImageSource.camera);
-    if (picked == null) return;
+    try {
+      FocusManager.instance.primaryFocus?.unfocus();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await const CollectionPhotoProofService().ensureCaptureReady();
+      final picked = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 78,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (picked == null) return;
 
-    final original = File(picked.path);
-    final compressed = await ImageCompressService.compress(original);
+      final proofWeight =
+          _canApplyLiveWeight(type) ? latestWeight : item['weight']?.toString();
+      final weight = double.tryParse(
+        (proofWeight ?? '').replaceAll(RegExp(r'[^0-9.]'), ''),
+      );
+      final proof = await const CollectionPhotoProofService().stamp(
+        source: File(picked.path),
+        wasteType: type,
+        stopLabel: widget.customerName,
+        assignmentId: widget.assignmentId,
+        weightKg: weight,
+      );
 
-    _safeSetState(() {
-      final updated = Map<String, dynamic>.from(item);
-      updated['image'] = compressed;
-      if (_canApplyLiveWeight(type)) {
-        updated['weight'] = latestWeight;
+      _safeSetState(() {
+        final updated = Map<String, dynamic>.from(item);
+        updated['image'] = proof.file;
+        updated['captureLatitude'] = proof.latitude;
+        updated['captureLongitude'] = proof.longitude;
+        if (_canApplyLiveWeight(type)) {
+          updated['weight'] = latestWeight;
+        }
+
+        _wasteData = {
+          ..._wasteData,
+          type: updated,
+        };
+
+        if (_canApplyLiveWeight(type)) {
+          activeType = type;
+        }
+        _syncManualWeightController(type, _weightTextFor(type));
+      });
+      if (mounted) {
+        AppFlash.success(context, 'Geotagged collection proof captured');
       }
-
-      _wasteData = {
-        ..._wasteData,
-        type: updated,
-      };
-
-      if (_canApplyLiveWeight(type)) {
-        activeType = type;
+    } on CollectionPhotoProofException catch (e) {
+      if (mounted) await handleCollectionPhotoProofFailure(context, e);
+    } catch (_) {
+      if (mounted) {
+        AppFlash.error(context, 'Could not process photo. Please try again.');
       }
-      _syncManualWeightController(type, _weightTextFor(type));
-    });
+    }
   }
 
   Widget _buildWasteSection(int index, String type, String displayName) {
@@ -2251,9 +2286,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                     // submitting with nothing saved would close the visit at
                     // 0 kg with no photos. Stay disabled until at least one
                     // stream is saved.
-                    onPressed: (_isSubmitting || addedCount == 0)
-                        ? null
-                        : _submitForm,
+                    onPressed:
+                        (_isSubmitting || addedCount == 0) ? null : _submitForm,
                     icon: _isSubmitting
                         ? const SizedBox(
                             width: 18,

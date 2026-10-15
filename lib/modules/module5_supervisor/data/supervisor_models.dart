@@ -1,9 +1,128 @@
 // Supervisor module data models. These mirror the backend payloads from
 // `/api/v1/staff-creations/supervisor-zone-map/me/` (never wired — see SupervisorRepository.fetchMyZoneScope) and
-// `/api/v1/schedule-masters/daily-trip-assignments/`.
+// `/api/v1/schedule-operations/daily-trip-assignments/`.
 
 import 'package:iwms_private_app/data/models/operator_trip_models.dart'
-    show OperatorTripCrew;
+    show OperatorTripCrew, OperatorTripCrewMember;
+
+class SupervisorServiceNotice {
+  const SupervisorServiceNotice({
+    required this.uniqueId,
+    required this.reasonCode,
+    required this.reasonLabel,
+    required this.reasonText,
+    required this.staffRecipientCount,
+    required this.customerRecipientCount,
+  });
+
+  final String uniqueId;
+  final String reasonCode;
+  final String reasonLabel;
+  final String reasonText;
+  final int staffRecipientCount;
+  final int customerRecipientCount;
+
+  String get explanation =>
+      reasonText.trim().isNotEmpty ? reasonText.trim() : reasonLabel;
+
+  factory SupervisorServiceNotice.fromJson(Map<String, dynamic> json) =>
+      SupervisorServiceNotice(
+        uniqueId: json['unique_id']?.toString() ?? '',
+        reasonCode: json['reason_code']?.toString() ?? '',
+        reasonLabel: json['reason_label']?.toString() ?? 'Operational issue',
+        reasonText: json['reason_text']?.toString() ?? '',
+        staffRecipientCount:
+            int.tryParse('${json['staff_recipient_count'] ?? 0}') ?? 0,
+        customerRecipientCount:
+            int.tryParse('${json['customer_recipient_count'] ?? 0}') ?? 0,
+      );
+}
+
+class SupervisorPlanOption {
+  const SupervisorPlanOption({
+    required this.tripPlanId,
+    required this.displayCode,
+    required this.collectionType,
+    required this.scheduledTime,
+    required this.state,
+    required this.vehicleNo,
+    required this.teamCode,
+    required this.driverName,
+    required this.operatorName,
+    required this.areaName,
+    this.assignmentId,
+    this.blockingReason,
+    this.notice,
+    this.teamMembers = const [],
+  });
+
+  final String tripPlanId;
+  final String displayCode;
+  final String collectionType;
+  final String scheduledTime;
+  final String state;
+  final String vehicleNo;
+  final String teamCode;
+  final String driverName;
+  final String operatorName;
+  final String areaName;
+  final String? assignmentId;
+  final String? blockingReason;
+  final SupervisorServiceNotice? notice;
+
+  /// Driver, operator and extra operators of the plan's team, with photos.
+  final List<OperatorTripCrewMember> teamMembers;
+
+  bool get needsAssignment => state == 'NEEDS_ASSIGNMENT';
+  bool get noCollection => state == 'NO_COLLECTION';
+  bool get blocked => state == 'BLOCKED' || state == 'NOT_SCHEDULED';
+  bool get canDeclareNoCollection =>
+      !noCollection &&
+      state != 'NOT_SCHEDULED' &&
+      state.toLowerCase() != 'in progress' &&
+      state.toLowerCase() != 'completed';
+  String get collectionLabel {
+    if (collectionType == 'household_collection') return 'Household';
+    if (collectionType == 'bin_collection') return 'Bin collection';
+    if (collectionType == 'bulk_waste_collection') return 'Bulk waste';
+    return 'Collection';
+  }
+
+  factory SupervisorPlanOption.fromJson(Map<String, dynamic> json) {
+    final wards = (json['ward_names'] as List? ?? const [])
+        .map((e) => e.toString())
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+    final noticeJson = json['notice'];
+    return SupervisorPlanOption(
+      tripPlanId: json['trip_plan_id']?.toString() ?? '',
+      displayCode: json['display_code']?.toString() ?? 'Trip Plan',
+      collectionType: json['collection_type']?.toString() ?? '',
+      scheduledTime: json['scheduled_time']?.toString() ?? '',
+      state: json['state']?.toString() ?? 'BLOCKED',
+      assignmentId: json['assignment_id']?.toString(),
+      blockingReason: json['blocking_reason']?.toString(),
+      vehicleNo: json['vehicle_no']?.toString() ?? 'Vehicle not assigned',
+      teamCode: json['team_code']?.toString() ?? 'Team not assigned',
+      driverName: json['driver_name']?.toString() ?? '',
+      operatorName: json['operator_name']?.toString() ?? '',
+      areaName: wards.isNotEmpty
+          ? wards
+              .map((w) => w.toLowerCase().startsWith('ward') ? w : 'Ward $w')
+              .join(', ')
+          : (json['zone_name']?.toString() ?? 'Assigned service area'),
+      notice: noticeJson is Map
+          ? SupervisorServiceNotice.fromJson(
+              Map<String, dynamic>.from(noticeJson))
+          : null,
+      teamMembers: (json['team_members'] as List? ?? const [])
+          .whereType<Map>()
+          .map((m) =>
+              OperatorTripCrewMember.fromJson(Map<String, dynamic>.from(m)))
+          .toList(),
+    );
+  }
+}
 
 /// The zone scope a supervisor is authorised to operate in.
 class SupervisorZoneScope {
@@ -59,6 +178,64 @@ class SupervisorZoneScope {
 /// A single stop on an assignment's route — a bin collection point or a
 /// household — unified so the detail sheet can render one Amazon-style
 /// timeline regardless of collection type.
+enum TripAlertSeverity { critical, warning, info }
+
+enum TripAlertKind {
+  breakdown,
+  retrip,
+  rejected,
+  noDriver,
+  noVehicle,
+  startOverdue,
+  delay,
+  customersWaiting,
+  awaitingClosure,
+}
+
+/// One open problem (or notice) on a trip, shown in the card's alerts row and
+/// the alerts sheet.
+class SupervisorTripAlert {
+  const SupervisorTripAlert({
+    required this.kind,
+    required this.title,
+    required this.short,
+    this.detail = '',
+    this.time,
+    this.waitingStops = const [],
+  });
+
+  final TripAlertKind kind;
+  final String title;
+
+  /// Fits the card's one-line alerts row: "Vehicle breakdown".
+  final String short;
+  final String detail;
+
+  /// "15:31" when the source records when it happened.
+  final String? time;
+
+  /// Only for [TripAlertKind.customersWaiting].
+  final List<SupervisorStop> waitingStops;
+
+  /// Customers waiting count once per customer, everything else once.
+  int get count => waitingStops.isEmpty ? 1 : waitingStops.length;
+
+  TripAlertSeverity get severity => switch (kind) {
+        TripAlertKind.breakdown ||
+        TripAlertKind.retrip ||
+        TripAlertKind.rejected ||
+        TripAlertKind.noDriver ||
+        TripAlertKind.noVehicle =>
+          TripAlertSeverity.critical,
+        TripAlertKind.startOverdue ||
+        TripAlertKind.delay =>
+          TripAlertSeverity.warning,
+        TripAlertKind.customersWaiting ||
+        TripAlertKind.awaitingClosure =>
+          TripAlertSeverity.info,
+      };
+}
+
 class SupervisorStop {
   const SupervisorStop({
     required this.uniqueId,
@@ -75,6 +252,8 @@ class SupervisorStop {
     this.collectedAt,
     this.collectedWeightKg,
     this.imageUrl,
+    this.customerAvailableAt,
+    this.customerAvailableNote,
   });
 
   final String uniqueId;
@@ -96,6 +275,18 @@ class SupervisorStop {
   // household stop carries one only if the driver's weighment attached a
   // photo. Null in both cases means "no photo", never an error state.
   final String? imageUrl;
+
+  /// Household only: when the customer tapped "I'm home now" in the citizen
+  /// app after the stop was marked Collect Later.
+  final DateTime? customerAvailableAt;
+  final String? customerAvailableNote;
+
+  /// The customer says they're home and the crew hasn't resolved it yet.
+  bool get customerWaiting =>
+      customerAvailableAt != null &&
+      !isCollected &&
+      const {'collect later', 'skipped', 'pending'}
+          .contains(status.trim().toLowerCase());
 
   bool get isSkippedOrDeferred =>
       !isCollected &&
@@ -141,6 +332,8 @@ class SupervisorStop {
       collectedAt: _parseDate(json['collected_at']),
       collectedWeightKg: _parseDouble(json['collected_weight_kg']),
       imageUrl: json['image']?.toString(),
+      customerAvailableAt: _parseDate(json['customer_available_at']),
+      customerAvailableNote: json['customer_available_note']?.toString(),
     );
   }
 
@@ -161,6 +354,7 @@ class SupervisorAssignment {
     required this.zoneId,
     required this.zoneName,
     required this.wardName,
+    this.areaIsWard = false,
     required this.tripCode,
     required this.wasteTypeName,
     required this.vehicleNo,
@@ -179,6 +373,15 @@ class SupervisorAssignment {
     this.hasBulk = false,
     this.tripCount = 1,
     this.totalTripTimeSeconds,
+    this.actualStartAt,
+    this.actualEndAt,
+    this.actualStartTime = '',
+    this.actualEndTime = '',
+    this.breakdownInfo = const {},
+    this.retripInfo = const {},
+    this.tripLogSummary = const {},
+    this.staffSource = '',
+    this.tripEvents = const [],
   });
 
   final String uniqueId;
@@ -186,6 +389,11 @@ class SupervisorAssignment {
   final String zoneId;
   final String zoneName;
   final String wardName;
+
+  /// True when [wardName] came from the trip's ward — false when it fell
+  /// back to the panchayat / location name — so the UI only says "Ward"
+  /// when it really is one.
+  final bool areaIsWard;
   final String tripCode;
   final String wasteTypeName;
   final String vehicleNo;
@@ -207,6 +415,176 @@ class SupervisorAssignment {
   final int tripCount;
   // Wall-clock duration on the trip, in whole seconds — null until started.
   final int? totalTripTimeSeconds;
+  final DateTime? actualStartAt;
+  final DateTime? actualEndAt;
+  final String actualStartTime;
+  final String actualEndTime;
+  final Map<String, dynamic> breakdownInfo;
+  final Map<String, dynamic> retripInfo;
+  final Map<String, dynamic> tripLogSummary;
+  final String staffSource;
+  final List<Map<String, dynamic>> tripEvents;
+
+  bool get isRemaining => !isCompleted && !isCancelled;
+  int get collectedCount => stops.where((s) => s.isCollected).length;
+  int get unavailableCount => stops
+      .where((s) =>
+          !s.isCollected &&
+          {'missed', 'not available'}.contains(s.status.toLowerCase()))
+      .length;
+  int get deferredCount => stops
+      .where((s) =>
+          !s.isCollected &&
+          {'skipped', 'collect later'}.contains(s.status.toLowerCase()))
+      .length;
+  int get unresolvedCount => stops.length - collectedCount - unavailableCount;
+
+  /// Households whose customer tapped "I'm home now" and is still waiting.
+  int get customersWaitingCount => stops.where((s) => s.customerWaiting).length;
+  bool get awaitingClosure =>
+      isInProgress && stops.isNotEmpty && unresolvedCount == 0;
+  bool get hasPendingBreakdown =>
+      breakdownInfo['approval_status']?.toString().toUpperCase() == 'PENDING';
+  bool get hasPendingRetrip =>
+      retripInfo['status']?.toString().toUpperCase() == 'PENDING';
+
+  /// Titles of everything on this trip that needs a look — the Trips tab's
+  /// "Needs attention" filter only checks whether this is empty.
+  List<String> attentionLabels(DateTime serverNow) =>
+      alerts(serverNow).map((a) => a.title).toList();
+
+  /// Every open alert on this trip, most severe first. Customers waiting
+  /// collapse into one alert carrying the stops, so a route with 300
+  /// "I'm home now" taps is still one row.
+  ///
+  /// Uses the server's local wall clock, never the device's date or timezone.
+  List<SupervisorTripAlert> alerts(DateTime serverNow) {
+    if (!isRemaining) return const [];
+    final alerts = <SupervisorTripAlert>[];
+    if (hasPendingBreakdown) {
+      alerts.add(SupervisorTripAlert(
+        kind: TripAlertKind.breakdown,
+        title: 'Vehicle breakdown needs review',
+        short: 'Vehicle breakdown',
+        detail: [
+          breakdownInfo['breakdown_reason'],
+          breakdownInfo['breakdown_vehicle_no'] ?? vehicleNo,
+        ].where((v) => v != null && v.toString().trim().isNotEmpty).join(' · '),
+        time: _clock(breakdownInfo['breakdown_time']),
+      ));
+    }
+    if (hasPendingRetrip) {
+      alerts.add(const SupervisorTripAlert(
+        kind: TripAlertKind.retrip,
+        title: 'Re-Trip decision needed',
+        short: 'Re-Trip decision',
+        detail: 'The driver asked to continue this route on another trip',
+      ));
+    }
+    if (approvalStatus.toUpperCase() == 'REJECTED') {
+      alerts.add(const SupervisorTripAlert(
+        kind: TripAlertKind.rejected,
+        title: 'Assignment rejected',
+        short: 'Assignment rejected',
+        detail: 'Resolve it before the driver can start',
+      ));
+    }
+    if (driverName.isEmpty) {
+      alerts.add(const SupervisorTripAlert(
+        kind: TripAlertKind.noDriver,
+        title: 'No driver assigned',
+        short: 'No driver',
+        detail: 'Assign a driver before the trip can start',
+      ));
+    }
+    if (vehicleNo.isEmpty) {
+      alerts.add(const SupervisorTripAlert(
+        kind: TripAlertKind.noVehicle,
+        title: 'No vehicle assigned',
+        short: 'No vehicle',
+        detail: 'Assign a vehicle before the trip can start',
+      ));
+    }
+    if (isScheduled && tripDate != null && scheduledTime.isNotEmpty) {
+      final parts = scheduledTime.split(':');
+      final hour = int.tryParse(parts.first);
+      final minute = parts.length > 1 ? int.tryParse(parts[1]) : null;
+      if (hour != null && minute != null) {
+        final scheduled = DateTime(
+            tripDate!.year, tripDate!.month, tripDate!.day, hour, minute);
+        final wallNow = DateTime(serverNow.year, serverNow.month, serverNow.day,
+            serverNow.hour, serverNow.minute);
+        final late = wallNow.difference(scheduled).inMinutes;
+        if (late > 0) {
+          final lateText =
+              late >= 60 ? '${late ~/ 60}h ${late % 60}m' : '${late}m';
+          final time = scheduledTime.length > 5
+              ? scheduledTime.substring(0, 5)
+              : scheduledTime;
+          alerts.add(SupervisorTripAlert(
+            kind: TripAlertKind.startOverdue,
+            title: 'Start overdue · $lateText',
+            short: 'Start overdue · $lateText',
+            detail: driverName.isEmpty
+                ? 'The $time trip has not started'
+                : '$driverName has not started the $time trip',
+          ));
+        }
+      }
+    }
+    for (final e in tripEvents) {
+      final label = e['label']?.toString() ?? '';
+      if (!label.startsWith('Delay:') ||
+          e['status']?.toString().toUpperCase() == 'RESOLVED') {
+        continue;
+      }
+      final reason = label.substring('Delay:'.length).trim();
+      alerts.add(SupervisorTripAlert(
+        kind: TripAlertKind.delay,
+        title: 'Driver reported a delay',
+        short: 'Driver delay',
+        detail: [reason, e['detail']]
+            .where((v) => v != null && v.toString().trim().isNotEmpty)
+            .join(' · '),
+        time: _clock(e['at']),
+      ));
+    }
+    final waiting = stops.where((s) => s.customerWaiting).toList();
+    if (waiting.isNotEmpty) {
+      alerts.add(SupervisorTripAlert(
+        kind: TripAlertKind.customersWaiting,
+        title: waiting.length == 1
+            ? 'Customer waiting for pickup'
+            : 'Customers waiting for pickup',
+        short: 'Customers waiting',
+        detail: 'Pressed \u201cI\u2019m home now\u201d',
+        waitingStops: waiting,
+      ));
+    }
+    if (awaitingClosure) {
+      alerts.add(const SupervisorTripAlert(
+        kind: TripAlertKind.awaitingClosure,
+        title: 'All stops resolved, awaiting trip closure',
+        short: 'Awaiting closure',
+        detail: 'The driver closes the trip from the driver app',
+      ));
+    }
+    alerts.sort((a, b) => a.severity.index.compareTo(b.severity.index));
+    return alerts;
+  }
+
+  /// "15:31" from an ISO timestamp or a bare "15:31:07" time.
+  static String? _clock(dynamic value) {
+    if (value == null) return null;
+    final raw = value.toString();
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) {
+      final local = parsed.isUtc ? parsed.toLocal() : parsed;
+      return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    }
+    final m = RegExp(r'^(\d{2}):(\d{2})').firstMatch(raw);
+    return m == null ? null : '${m[1]}:${m[2]}';
+  }
 
   /// "Bin Collection", "Household Collection", "Bulk Waste Collection", a
   /// combination, or "Collection" if none of the flags are set.
@@ -263,7 +641,8 @@ class SupervisorAssignment {
     // The daily-trip-assignments endpoint returns a trip's wards as a list
     // (`wards_detail`) — a trip can technically cover more than one ward —
     // so use the first one for the single-line assignment card display.
-    final wardsDetail = (json['wards_detail'] as List?) ?? const [];
+    final wardsDetail =
+        (json['wards_detail'] as List?) ?? (json['wards'] as List?) ?? const [];
     final ward = wardsDetail.isNotEmpty && wardsDetail.first is Map
         ? wardsDetail.first as Map
         : const {};
@@ -271,6 +650,9 @@ class SupervisorAssignment {
     final wasteType = (json['waste_type'] as Map?) ?? const {};
     final vehicle = (json['vehicle'] as Map?) ?? const {};
     final staff = (json['effective_staff'] as Map?) ?? const {};
+    final log = (json['trip_log_summary'] as Map?) ?? const {};
+    final closed = {'COMPLETED', 'CANCELLED'}
+        .contains(_normStatus(json['status'], fallback: 'SCHEDULED'));
 
     final wardName = ward['ward_name']?.toString() ??
         panchayat['panchayat_name']?.toString() ??
@@ -299,17 +681,23 @@ class SupervisorAssignment {
           zone['unique_id']?.toString() ?? ward['zone_id']?.toString() ?? '',
       zoneName: zoneName,
       wardName: wardName,
+      areaIsWard: (ward['ward_name']?.toString() ?? '').isNotEmpty,
       tripCode: tripPlan['display_code']?.toString() ??
           json['unique_id']?.toString() ??
           '',
       wasteTypeName: wasteType['waste_type_name']?.toString() ??
           tripPlan['waste_type_name']?.toString() ??
           '',
-      vehicleNo: vehicle['vehicle_no']?.toString() ??
+      vehicleNo: (closed ? log['vehicle_no'] : null)?.toString() ??
+          vehicle['vehicle_no']?.toString() ??
           tripPlan['vehicle_no']?.toString() ??
           '',
-      driverName: staff['driver']?.toString() ?? '',
-      operatorName: staff['operator']?.toString() ?? '',
+      driverName: (closed ? log['driver'] : null)?.toString() ??
+          staff['driver']?.toString() ??
+          '',
+      operatorName: (closed ? log['operator'] : null)?.toString() ??
+          staff['operator']?.toString() ??
+          '',
       status: _normStatus(json['status'], fallback: 'SCHEDULED'),
       approvalStatus: json['approval_status']?.toString() ?? 'PENDING',
       tripDate: _parseDate(json['trip_date']),
@@ -328,10 +716,25 @@ class SupervisorAssignment {
       tripCount: int.tryParse(json['trip_count']?.toString() ?? '') ?? 1,
       totalTripTimeSeconds:
           int.tryParse(json['total_trip_time_seconds']?.toString() ?? ''),
+      actualStartAt: _parseDate(json['actual_start_at']),
+      actualEndAt: _parseDate(json['actual_end_at']),
+      actualStartTime: json['actual_start_time']?.toString() ?? '',
+      actualEndTime: json['actual_end_time']?.toString() ?? '',
+      breakdownInfo:
+          Map<String, dynamic>.from(json['breakdown_info'] as Map? ?? const {}),
+      retripInfo:
+          Map<String, dynamic>.from(json['retrip_info'] as Map? ?? const {}),
+      tripLogSummary: Map<String, dynamic>.from(
+          json['trip_log_summary'] as Map? ?? const {}),
+      staffSource: staff['source']?.toString() ?? '',
+      tripEvents: (json['trip_events'] as List? ?? const [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(),
     );
   }
 
-  /// Adapts a `schedule-masters/daily-trip-logs/` payload (actuals) into the
+  /// Adapts a `schedule-operations/daily-trip-logs/` payload (actuals) into the
   /// same shape as an assignment, so the History screen can reuse
   /// [SupervisorAssignmentCard] unmodified ("matching UI").
   factory SupervisorAssignment.fromTripLogJson(Map<String, dynamic> json) {
@@ -368,6 +771,7 @@ class SupervisorAssignment {
       zoneId: zone['unique_id']?.toString() ?? '',
       zoneName: zoneName,
       wardName: wardName,
+      areaIsWard: (ward['ward_name']?.toString() ?? '').isNotEmpty,
       tripCode: tripAssignment['display_code']?.toString() ??
           json['unique_id']?.toString() ??
           '',
@@ -822,6 +1226,34 @@ class SupervisorStaffAttendanceSummary {
     );
   }
 
+  factory SupervisorStaffAttendanceSummary.fromStaffList(
+    List<SupervisorStaff> staff,
+  ) {
+    final present = <SupervisorStaff>[];
+    final absent = <SupervisorStaff>[];
+    final leave = <SupervisorStaff>[];
+
+    for (final member in staff) {
+      final status = member.attendanceStatus.trim().toLowerCase();
+      if (status.contains('leave')) {
+        leave.add(member);
+      } else if (status.contains('present') || status.contains('pending')) {
+        present.add(member);
+      } else {
+        absent.add(member);
+      }
+    }
+
+    return SupervisorStaffAttendanceSummary(
+      presentCount: present.length,
+      absentCount: absent.length,
+      leaveCount: leave.length,
+      presentStaff: present,
+      absentStaff: absent,
+      leaveStaff: leave,
+    );
+  }
+
   static const empty = SupervisorStaffAttendanceSummary(
     presentCount: 0,
     absentCount: 0,
@@ -832,7 +1264,7 @@ class SupervisorStaffAttendanceSummary {
   );
 }
 
-/// A staff template (from `schedule-masters/staff-templates/`) — the "Teams"
+/// A staff template (from `schedule-setup/staff-templates/`) — the "Teams"
 /// list: a driver + operator (+ extra operators) grouping.
 class SupervisorTeam {
   const SupervisorTeam({
@@ -872,18 +1304,74 @@ class SupervisorTeam {
             .where((item) => item.isNotEmpty)
             .toList()
         : const <String>[];
+    final driverId = _staffRef(j['driver_id']);
+    final operatorId = _staffRef(j['operator_id']);
+    final driverName = _staffName(j['driver_id'], fallback: j['driver_name']);
+    final operatorName =
+        _staffName(j['operator_id'], fallback: j['operator_name']);
     return SupervisorTeam(
       uniqueId: _str(j['unique_id']),
-      driverId: _str(j['driver_id']),
-      operatorId: _str(j['operator_id']),
-      driverName: _str(j['driver_name']),
-      operatorName: _str(j['operator_name']),
+      driverId: driverId,
+      operatorId: operatorId,
+      driverName: driverName,
+      operatorName: operatorName,
       extraOperatorIds: extraIds,
       extraCount: extraIds.length,
       status: _str(j['status']),
       approvalStatus: _str(j['approval_status']),
     );
   }
+
+  SupervisorTeam withCrewFallback(SupervisorAssignment? assignment) {
+    if (assignment == null) return this;
+    final driver = assignment.crew?.driver;
+    final operator = assignment.crew?.operator;
+    final extraIds = extraOperatorIds.isNotEmpty
+        ? extraOperatorIds
+        : assignment.crew?.extraOperators
+                .map((member) => member.uniqueId)
+                .where((id) => id.isNotEmpty)
+                .toList() ??
+            const <String>[];
+    return SupervisorTeam(
+      uniqueId: uniqueId,
+      driverId: driverId.isNotEmpty ? driverId : driver?.uniqueId ?? '',
+      operatorId: operatorId.isNotEmpty ? operatorId : operator?.uniqueId ?? '',
+      driverName: driverName.isNotEmpty
+          ? driverName
+          : (driver?.displayName.isNotEmpty == true
+              ? driver!.displayName
+              : assignment.driverName),
+      operatorName: operatorName.isNotEmpty
+          ? operatorName
+          : (operator?.displayName.isNotEmpty == true
+              ? operator!.displayName
+              : assignment.operatorName),
+      extraOperatorIds: extraIds,
+      extraCount: extraIds.length,
+      status: status,
+      approvalStatus: approvalStatus,
+    );
+  }
+}
+
+String _staffRef(dynamic raw) {
+  if (raw is Map) {
+    return _str(raw['staff_unique_id']).isNotEmpty
+        ? _str(raw['staff_unique_id'])
+        : _str(raw['unique_id']);
+  }
+  return _str(raw);
+}
+
+String _staffName(dynamic raw, {dynamic fallback}) {
+  if (raw is Map) {
+    for (final key in ['employee_name', 'name', 'username']) {
+      final value = _str(raw[key]);
+      if (value.isNotEmpty) return value;
+    }
+  }
+  return _str(fallback);
 }
 
 /// A driver/operator dropdown option (`staff_unique_id` + display name),
@@ -1013,33 +1501,53 @@ class SupervisorCollectionPoint {
 class SupervisorHousehold {
   const SupervisorHousehold({
     required this.uniqueId,
+    required this.customerId,
     required this.name,
     required this.contactNo,
     required this.buildingNo,
     required this.street,
     required this.area,
-    required this.panchayatName,
-    required this.municipalityName,
-    required this.areaTypeName,
+    required this.zoneName,
+    required this.wardName,
     required this.qrCodeUrl,
     required this.isActive,
     required this.latitude,
     required this.longitude,
+    required this.companyName,
+    required this.projectName,
+    required this.projectLogoUrl,
+    required this.apartmentName,
+    required this.industryName,
+    required this.blockNo,
+    required this.flatNo,
+    required this.villaNo,
   });
 
   final String uniqueId;
+  final String customerId;
   final String name;
   final String contactNo;
   final String buildingNo;
   final String street;
   final String area;
-  final String panchayatName;
-  final String municipalityName;
-  final String areaTypeName;
+  final String zoneName;
+  final String wardName;
   final String qrCodeUrl;
   final bool isActive;
   final String latitude;
   final String longitude;
+
+  // Everything below is only needed to reproduce the web door-sticker
+  // template (see customerQrStickerPdf.ts) on the QR card in this app —
+  // the rest of the Households screen never reads it.
+  final String companyName;
+  final String projectName;
+  final String projectLogoUrl;
+  final String apartmentName;
+  final String industryName;
+  final String blockNo;
+  final String flatNo;
+  final String villaNo;
 
   String get address {
     final parts = [buildingNo, street, area]
@@ -1048,16 +1556,62 @@ class SupervisorHousehold {
     return parts.isEmpty ? 'Address not available' : parts.join(', ');
   }
 
+  /// This project has no panchayat/municipality hierarchy — households are
+  /// scoped by Zone/Ward, so that is what the list/card header shows.
   String get scopeLabel {
-    for (final value in [panchayatName, municipalityName, areaTypeName]) {
+    for (final value in [wardName, zoneName]) {
       if (value.trim().isNotEmpty) return value;
     }
     return 'Unassigned area';
   }
 
+  /// Building/society line for the QR card — mirrors
+  /// `customerQrStickerPdf.ts`'s `stickerBuilding`. Deliberately excludes
+  /// street/sub-property type when an apartment or industry name is
+  /// present, same precedence as the web template.
+  String get stickerBuildingLine {
+    for (final value in [apartmentName, industryName, area, street]) {
+      if (value.trim().isNotEmpty) return value.trim();
+    }
+    return '';
+  }
+
+  /// Unit/house designation — mirrors `stickerUnit`.
+  String get stickerUnitLine {
+    final flat = [blockNo, flatNo]
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join('-');
+    if (flat.isNotEmpty) return 'Flat No: $flat';
+    if (villaNo.trim().isNotEmpty) return 'No. ${villaNo.trim()}';
+    if (buildingNo.trim().isNotEmpty) return 'No. ${buildingNo.trim()}';
+    return customerId.isNotEmpty ? customerId : uniqueId;
+  }
+
+  /// "Zone 2 · GNO (Ward No 18)" — mirrors `stickerWardHeadline`.
+  String get wardHeadline {
+    var wardLabel = wardName.trim();
+    final match =
+        RegExp(r'^(.*?)\s*ward\s*(?:no\.?\s*)?(\S+)$', caseSensitive: false)
+            .firstMatch(wardLabel);
+    if (match != null) {
+      final prefix = (match.group(1) ?? '').trim();
+      final number = match.group(2) ?? '';
+      wardLabel =
+          prefix.isNotEmpty ? '$prefix (Ward No $number)' : 'Ward No $number';
+    }
+    final zone = zoneName.trim();
+    final zoneIsRedundant =
+        zone.isNotEmpty && wardLabel.toLowerCase().contains(zone.toLowerCase());
+    return [if (!zoneIsRedundant) zone, wardLabel]
+        .where((part) => part.isNotEmpty)
+        .join(' · ');
+  }
+
   factory SupervisorHousehold.fromJson(Map<String, dynamic> j) {
     return SupervisorHousehold(
       uniqueId: _str(j['unique_id']),
+      customerId: _str(j['customer_id']),
       name: _str(j['customer_name']).isNotEmpty
           ? _str(j['customer_name'])
           : 'Household',
@@ -1065,13 +1619,20 @@ class SupervisorHousehold {
       buildingNo: _str(j['building_no']),
       street: _str(j['street']),
       area: _str(j['area']),
-      panchayatName: _str(j['panchayat_name']),
-      municipalityName: _str(j['municipality_name']),
-      areaTypeName: _str(j['area_type_name']),
+      zoneName: _str(j['zone_name']),
+      wardName: _str(j['ward_name']),
       qrCodeUrl: _str(j['qr_code']),
       isActive: j['is_active'] == true,
       latitude: _str(j['latitude']),
       longitude: _str(j['longitude']),
+      companyName: _str(j['company_name']),
+      projectName: _str(j['project_name']),
+      projectLogoUrl: _str(j['project_logo']),
+      apartmentName: _str(j['apartment_name']),
+      industryName: _str(j['industry_name']),
+      blockNo: _str(j['block_no']),
+      flatNo: _str(j['flat_no']),
+      villaNo: _str(j['villa_no']),
     );
   }
 }

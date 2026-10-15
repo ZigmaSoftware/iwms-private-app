@@ -69,11 +69,14 @@ class TripRetripRequest {
     required this.livePendingBins,
     required this.livePendingHouseholds,
     this.createdAt,
+    this.expiresAt,
+    this.reminderSentAt,
+    this.escalatedAt,
   });
 
   final String uniqueId;
   final String assignmentUniqueId;
-  final String status; // Pending | Approved | Rejected
+  final String status; // Pending | Approved | Rejected | Expired
   final String reason;
   // Snapshot counts taken when the request was raised — the audit record of
   // what was outstanding then, not necessarily what's outstanding now.
@@ -92,8 +95,30 @@ class TripRetripRequest {
   final List<RetripPendingStop> livePendingBins;
   final List<RetripPendingStop> livePendingHouseholds;
   final DateTime? createdAt;
+  final DateTime? expiresAt;
+  final DateTime? reminderSentAt;
+  final DateTime? escalatedAt;
 
   bool get isPending => status == 'Pending';
+  bool get isExpired => status == 'Expired';
+
+  Duration? remaining([DateTime? now]) {
+    if (!isPending || expiresAt == null) return null;
+    final value = expiresAt!.difference(now ?? DateTime.now());
+    return value.isNegative ? Duration.zero : value;
+  }
+
+  bool get isLocallyExpired =>
+      isPending && expiresAt != null && !expiresAt!.isAfter(DateTime.now());
+
+  String expiryLabel([DateTime? now]) {
+    if (isExpired) return 'Expired';
+    final value = remaining(now);
+    if (value == null) return '';
+    if (value == Duration.zero) return 'Expired';
+    final minutes = (value.inSeconds / 60).ceil();
+    return 'Expires in $minutes min';
+  }
 
   bool get isHousehold =>
       (collectionType ?? '').contains('household') ||
@@ -147,6 +172,9 @@ class TripRetripRequest {
       livePendingBins: bins,
       livePendingHouseholds: households,
       createdAt: _date(json['created_at']),
+      expiresAt: _date(json['expires_at']),
+      reminderSentAt: _date(json['reminder_sent_at']),
+      escalatedAt: _date(json['escalated_at']),
     );
   }
 }

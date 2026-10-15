@@ -61,6 +61,17 @@ void main() {
       );
       expect(bundle.hasScreenData, isTrue);
     });
+
+    test('allows the dev-branch driver delay screen key', () {
+      final bundle = bundleWith(
+        modules: ['driver'],
+        screens: {
+          'driver': [AppScreens.driverDelays],
+        },
+      );
+      expect(bundle.canSeeScreen(AppScreens.driverDelays), isTrue);
+      expect(bundle.canSeeScreen(AppScreens.driverTrips), isFalse);
+    });
   });
 
   group('screensFor', () {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -49,7 +50,39 @@ class _SupervisorShell extends StatefulWidget {
   State<_SupervisorShell> createState() => _SupervisorShellState();
 }
 
-class _SupervisorShellState extends State<_SupervisorShell> {
+class _SupervisorShellState extends State<_SupervisorShell>
+    with WidgetsBindingObserver {
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+          (ModalRoute.of(context)?.isCurrent ?? false) &&
+          (_activeTab == SupervisorNavTab.trips ||
+              _activeTab == SupervisorNavTab.dashboard)) {
+        context.read<SupervisorBloc>().add(const SupervisorRefreshRequested());
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<SupervisorBloc>().add(const SupervisorRefreshRequested());
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   /// Every slot the shell can show, with the app screen that unlocks it.
   /// Profile is unconditional — a signed-in user can always reach their own
   /// profile and sign out, whatever else they were granted.
@@ -72,6 +105,9 @@ class _SupervisorShellState extends State<_SupervisorShell> {
   void _setTab(SupervisorNavTab tab) {
     if (_activeTab == tab) return;
     setState(() => _activeTab = tab);
+    if (tab == SupervisorNavTab.trips || tab == SupervisorNavTab.dashboard) {
+      context.read<SupervisorBloc>().add(const SupervisorRefreshRequested());
+    }
   }
 
   void _logout() {
@@ -123,7 +159,6 @@ class _SupervisorShellState extends State<_SupervisorShell> {
     final name = _identityName();
 
     final slots = _slotTabs;
-    final navItems = slots.map(_navItemFor).toList();
 
     // A tab the user has lost access to (permissions changed while they were
     // signed in) must not leave the shell pointing at nothing.
@@ -168,10 +203,12 @@ class _SupervisorShellState extends State<_SupervisorShell> {
             ),
           ),
         ),
-        bottomNavigationBar: SupervisorAnimatedNavBar(
-          activeIndex: activeSlot,
-          items: navItems,
-          onTabSelected: (index) => _setTab(slots[index]),
+        bottomNavigationBar: BlocBuilder<SupervisorBloc, SupervisorState>(
+          builder: (context, state) => SupervisorAnimatedNavBar(
+            activeIndex: activeSlot,
+            items: slots.map(_navItemFor).toList(),
+            onTabSelected: (index) => _setTab(slots[index]),
+          ),
         ),
       ),
     );
@@ -185,9 +222,10 @@ class _SupervisorShellState extends State<_SupervisorShell> {
           label: 'Dashboard',
         );
       case SupervisorNavTab.trips:
-        return const SupervisorNavItem(
+        return SupervisorNavItem(
           icon: Icons.local_shipping_rounded,
           label: 'Trips',
+          badgeCount: context.read<SupervisorBloc>().state.activeTrips.length,
         );
       case SupervisorNavTab.attendance:
         return const SupervisorNavItem(

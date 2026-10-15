@@ -25,8 +25,9 @@ import 'package:iwms_private_app/modules/module3_operator/offline/pending_finali
 import 'package:iwms_private_app/modules/module3_operator/services/bluetooth_permissons.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/generateunique_id.dart';
-import 'package:iwms_private_app/modules/module3_operator/services/image_compress_service.dart';
 import 'package:iwms_private_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_private_app/shared/services/collection_photo_proof_service.dart';
+import 'package:iwms_private_app/shared/widgets/collection_photo_permission_dialog.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
@@ -501,8 +502,12 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         ..fields['waste_type'] = wasteTypeId
         ..fields['waste_type_id'] = wasteTypeId
         ..fields['weight'] = weight
-        ..fields['latitude'] = widget.latitude
-        ..fields['longitude'] = widget.longitude;
+        ..fields['latitude'] =
+            (data['captureLatitude'] as double?)?.toStringAsFixed(6) ??
+                widget.latitude
+        ..fields['longitude'] =
+            (data['captureLongitude'] as double?)?.toStringAsFixed(6) ??
+                widget.longitude;
 
       if (isUpdate && uniqueId != null) {
         request.fields['unique_id'] = uniqueId;
@@ -1362,6 +1367,60 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     );
   }
 
+  Future<void> _captureWastePhoto(
+    String type,
+    Map<String, dynamic> item,
+  ) async {
+    try {
+      FocusManager.instance.primaryFocus?.unfocus();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await const CollectionPhotoProofService().ensureCaptureReady();
+      final picked = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 78,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (picked == null) return;
+
+      final proofWeight =
+          _canApplyLiveWeight(type) ? latestWeight : item['weight']?.toString();
+      final weight = double.tryParse(
+        (proofWeight ?? '').replaceAll(RegExp(r'[^0-9.]'), ''),
+      );
+      final proof = await const CollectionPhotoProofService().stamp(
+        source: File(picked.path),
+        wasteType: type,
+        stopLabel: widget.customerName,
+        assignmentId: widget.assignmentId,
+        weightKg: weight,
+      );
+
+      _safeSetState(() {
+        final updated = Map<String, dynamic>.from(item);
+        updated['image'] = proof.file;
+        updated['captureLatitude'] = proof.latitude;
+        updated['captureLongitude'] = proof.longitude;
+        if (_canApplyLiveWeight(type)) {
+          updated['weight'] = latestWeight;
+        }
+
+        _wasteData = {..._wasteData, type: updated};
+        if (_canApplyLiveWeight(type)) activeType = type;
+        _syncManualWeightController(type, _weightTextFor(type));
+      });
+      if (mounted) {
+        AppFlash.success(context, 'Geotagged collection proof captured');
+      }
+    } on CollectionPhotoProofException catch (e) {
+      if (mounted) await handleCollectionPhotoProofFailure(context, e);
+    } catch (_) {
+      if (mounted) {
+        AppFlash.error(context, 'Could not process photo. Please try again.');
+      }
+    }
+  }
+
   Widget _buildWasteSection(String type, String displayName) {
     final item = _wasteData[type]!;
     final image = item['image'] as File?;
@@ -1596,36 +1655,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    onPressed: () async {
-                      final picked =
-                          await _picker.pickImage(source: ImageSource.camera);
-                      if (picked == null) return;
-
-                      final original = File(picked.path);
-                      final compressed =
-                          await ImageCompressService.compress(original);
-
-                      _safeSetState(() {
-                        final updated = Map<String, dynamic>.from(item);
-                        updated['image'] = compressed;
-                        if (_canApplyLiveWeight(type)) {
-                          updated['weight'] = latestWeight;
-                        }
-
-                        _wasteData = {
-                          ..._wasteData,
-                          type: updated,
-                        };
-
-                        if (_canApplyLiveWeight(type)) {
-                          activeType = type;
-                        }
-                        _syncManualWeightController(
-                          type,
-                          _weightTextFor(type),
-                        );
-                      });
-                    },
+                    onPressed: () => _captureWastePhoto(type, item),
                     icon: const Icon(Icons.camera_alt_outlined, size: 18),
                     label: Text(
                       image == null ? "Capture" : "Retake",

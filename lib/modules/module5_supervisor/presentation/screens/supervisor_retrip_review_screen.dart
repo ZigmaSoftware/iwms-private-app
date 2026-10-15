@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:iwms_private_app/core/ui/app_flash.dart';
@@ -9,8 +11,8 @@ import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/s
 /// from the government app's identically-purposed
 /// `SupervisorRetripReviewScreen` (`module5_supervisor/presentation/screens/
 /// supervisor_retrip_review_screen.dart`) — a bin trip lets the supervisor
-/// tick which pending stops carry over to the continuation trip; a household
-/// trip carries everything over wholesale (nothing to pick).
+/// tick which pending stops carry over to the continuation trip. Every
+/// pending stop starts selected; the supervisor unticks anything to drop.
 class SupervisorRetripReviewScreen extends StatefulWidget {
   const SupervisorRetripReviewScreen({super.key, required this.request});
 
@@ -34,23 +36,60 @@ class SupervisorRetripReviewScreen extends StatefulWidget {
 class _SupervisorRetripReviewScreenState
     extends State<SupervisorRetripReviewScreen> {
   final TripRetripRepository _repo = TripRetripRepository();
-  late final Set<String> _selected;
+  late TripRetripRequest _detail;
+  final Set<String> _selected = <String>{};
   final _remarksController = TextEditingController();
   bool _busy = false;
+  bool _loading = true;
+  String? _loadError;
+  Timer? _deadlineTimer;
+  bool _expiryRefreshStarted = false;
 
-  TripRetripRequest get _request => widget.request;
+  TripRetripRequest get _request => _detail;
 
   @override
   void initState() {
     super.initState();
-    // Default to carrying over everything outstanding — the supervisor
-    // un-ticks what should be dropped for the day instead of building the
-    // list from nothing.
-    _selected = _request.liveStops.map((s) => s.uniqueId).toSet();
+    _detail = widget.request;
+    _selected.addAll(_detail.liveStops.map((s) => s.uniqueId));
+    _loadDetail();
+    _deadlineTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!mounted) return;
+      setState(() {});
+      if (_request.isLocallyExpired && !_expiryRefreshStarted) {
+        _expiryRefreshStarted = true;
+        _loadDetail();
+      }
+    });
+  }
+
+  Future<void> _loadDetail() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final fresh = await _repo.fetchRequest(widget.request.uniqueId);
+      if (!mounted) return;
+      setState(() {
+        _detail = fresh;
+        _selected
+          ..clear()
+          ..addAll(fresh.liveStops.map((s) => s.uniqueId));
+        _loading = false;
+      });
+    } on TripRetripException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.message;
+        _loading = false;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _deadlineTimer?.cancel();
     _remarksController.dispose();
     super.dispose();
   }
@@ -74,10 +113,9 @@ class _SupervisorRetripReviewScreenState
   }
 
   Future<void> _approve() async {
-    if (_busy) return;
-    final isHousehold = _request.isHousehold;
+    if (_busy || !_request.isPending || _request.isLocallyExpired) return;
 
-    if (!isHousehold && _selected.isEmpty) {
+    if (_selected.isEmpty && _request.liveStops.isNotEmpty) {
       final confirmed = await _confirmDropAll();
       if (confirmed != true) return;
     }
@@ -86,7 +124,7 @@ class _SupervisorRetripReviewScreenState
     try {
       final newId = await _repo.approve(
         _request.uniqueId,
-        collectionPointIds: isHousehold ? null : _selected.toList(),
+        collectionPointIds: _selected.toList(),
         remarks: _remarksController.text,
       );
       if (!mounted) return;
@@ -105,7 +143,7 @@ class _SupervisorRetripReviewScreenState
   }
 
   Future<void> _reject() async {
-    if (_busy) return;
+    if (_busy || !_request.isPending || _request.isLocallyExpired) return;
     final remarks = await _askRejectReason();
     if (remarks == null) return;
 
@@ -162,8 +200,8 @@ class _SupervisorRetripReviewScreenState
             const Text(
               'The trip stays In Progress and the driver is asked to '
               'continue the remaining stops.',
-              style: TextStyle(
-                  fontSize: 12.5, color: SupervisorTheme.mutedText),
+              style:
+                  TextStyle(fontSize: 12.5, color: SupervisorTheme.mutedText),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -214,13 +252,21 @@ class _SupervisorRetripReviewScreenState
                 children: [
                   _summaryCard(),
                   const SizedBox(height: 14),
-                  _outcomeNotice(),
-                  const SizedBox(height: 16),
-                  _stopsHeader(),
-                  const SizedBox(height: 6),
-                  _stopsList(),
-                  const SizedBox(height: 16),
-                  _remarksField(),
+                  if (_loading) ...[
+                    const SizedBox(height: 80),
+                    const Center(child: CircularProgressIndicator()),
+                    const SizedBox(height: 80),
+                  ] else if (_loadError != null) ...[
+                    _loadErrorCard(),
+                  ] else ...[
+                    _outcomeNotice(),
+                    const SizedBox(height: 16),
+                    _stopsHeader(),
+                    const SizedBox(height: 6),
+                    _stopsList(),
+                    const SizedBox(height: 16),
+                    _remarksField(),
+                  ],
                 ],
               ),
             ),
@@ -240,6 +286,8 @@ class _SupervisorRetripReviewScreenState
       if (r.requestedByName.isNotEmpty)
         MapEntry('Requested by', r.requestedByName),
       if (r.tripDate.isNotEmpty) MapEntry('Trip date', r.tripDate),
+      if (r.expiryLabel().isNotEmpty)
+        MapEntry('Decision window', r.expiryLabel()),
     ];
 
     return Container(
@@ -290,8 +338,8 @@ class _SupervisorRetripReviewScreenState
               decoration: BoxDecoration(
                 color: SupervisorTheme.warning.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
-                border:
-                    Border.all(color: SupervisorTheme.warning.withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: SupervisorTheme.warning.withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,14 +373,33 @@ class _SupervisorRetripReviewScreenState
 
   Widget _outcomeNotice() {
     final r = _request;
+    if (!r.isPending || r.isLocallyExpired) {
+      final expired = r.isExpired || r.isLocallyExpired;
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: (expired ? SupervisorTheme.danger : SupervisorTheme.mutedText)
+              .withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          expired
+              ? 'This request expired without a decision. The original trip remains open.'
+              : 'This request has already been ${r.status.toLowerCase()}.',
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: SupervisorTheme.strongText,
+          ),
+        ),
+      );
+    }
     final total = r.liveStops.length;
-    final message = r.isHousehold
-        ? 'All $total remaining household(s) will move to a new trip on the '
-            'same trip plan. This trip will be closed with its actual end '
-            'time.'
-        : '${_selected.length} of $total collection point(s) will move to a '
-            'new trip. Unticked stops are dropped for today, and this trip '
-            'is closed.';
+    final noun = r.isHousehold ? 'household(s)' : 'collection point(s)';
+    final message = '${_selected.length} of $total $noun will move to a '
+        'new trip. Unticked stops are dropped for today, and this trip '
+        'is closed.';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -342,7 +409,8 @@ class _SupervisorRetripReviewScreenState
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline_rounded, size: 16, color: SupervisorTheme.accent),
+          Icon(Icons.info_outline_rounded,
+              size: 16, color: SupervisorTheme.accent),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -363,21 +431,13 @@ class _SupervisorRetripReviewScreenState
   Widget _stopsHeader() {
     final r = _request;
     final total = r.liveStops.length;
-    if (r.isHousehold) {
-      return Text(
-        'Remaining households ($total)',
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          color: SupervisorTheme.strongText,
-        ),
-      );
-    }
+    final title =
+        r.isHousehold ? 'Select households' : 'Select collection points';
     return Row(
       children: [
         Expanded(
           child: Text(
-            'Select collection points (${_selected.length}/$total)',
+            '$title (${_selected.length}/$total)',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
@@ -387,9 +447,7 @@ class _SupervisorRetripReviewScreenState
         ),
         if (total > 0)
           TextButton(
-            onPressed: _busy
-                ? null
-                : () => _setAll(_selected.length != total),
+            onPressed: _busy ? null : () => _setAll(_selected.length != total),
             child: Text(_selected.length == total ? 'Clear all' : 'Select all'),
           ),
       ],
@@ -410,7 +468,8 @@ class _SupervisorRetripReviewScreenState
       alignment: Alignment.center,
       child: Column(
         children: [
-          Icon(Icons.check_circle_rounded, size: 36, color: SupervisorTheme.success),
+          Icon(Icons.check_circle_rounded,
+              size: 36, color: SupervisorTheme.success),
           const SizedBox(height: 10),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
@@ -434,36 +493,6 @@ class _SupervisorRetripReviewScreenState
   Widget _stopRow(RetripPendingStop stop) {
     final isHousehold = _request.isHousehold;
     final statusLabel = stop.status.isNotEmpty ? stop.status : 'Pending';
-
-    if (isHousehold) {
-      // Households have no choice to make, so render them as a plain
-      // read-only list rather than a disabled checkbox (which reads as
-      // "blocked").
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            const Icon(Icons.home_outlined, size: 16, color: SupervisorTheme.mutedText),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                stop.name,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: SupervisorTheme.strongText,
-                ),
-              ),
-            ),
-            Text(
-              statusLabel,
-              style: const TextStyle(fontSize: 11.5, color: SupervisorTheme.mutedText),
-            ),
-          ],
-        ),
-      );
-    }
-
     final selected = _selected.contains(stop.uniqueId);
     return InkWell(
       onTap: _busy ? null : () => _toggle(stop.uniqueId),
@@ -476,6 +505,11 @@ class _SupervisorRetripReviewScreenState
               activeColor: SupervisorTheme.accent,
               onChanged: _busy ? null : (_) => _toggle(stop.uniqueId),
             ),
+            if (isHousehold) ...[
+              const Icon(Icons.home_outlined,
+                  size: 16, color: SupervisorTheme.mutedText),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Text(
                 stop.name,
@@ -488,7 +522,8 @@ class _SupervisorRetripReviewScreenState
             ),
             Text(
               statusLabel,
-              style: const TextStyle(fontSize: 11.5, color: SupervisorTheme.mutedText),
+              style: const TextStyle(
+                  fontSize: 11.5, color: SupervisorTheme.mutedText),
             ),
           ],
         ),
@@ -510,7 +545,23 @@ class _SupervisorRetripReviewScreenState
   }
 
   Widget _actionBar() {
-    final isHousehold = _request.isHousehold;
+    final canDecide = _request.isPending && !_request.isLocallyExpired;
+    if (!canDecide) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.fromLTRB(
+            16, 12, 16, 12 + MediaQuery.viewPaddingOf(context).bottom),
+        decoration: BoxDecoration(
+          color: SupervisorTheme.surface,
+          border: Border(top: BorderSide(color: SupervisorTheme.hairline)),
+        ),
+        child: ElevatedButton.icon(
+          onPressed: _loading ? null : _loadDetail,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Refresh status'),
+        ),
+      );
+    }
     return Container(
       padding: EdgeInsets.fromLTRB(
           16, 12, 16, 12 + MediaQuery.viewPaddingOf(context).bottom),
@@ -525,7 +576,8 @@ class _SupervisorRetripReviewScreenState
               onPressed: _busy ? null : _reject,
               style: OutlinedButton.styleFrom(
                 foregroundColor: SupervisorTheme.danger,
-                side: BorderSide(color: SupervisorTheme.danger.withValues(alpha: 0.4)),
+                side: BorderSide(
+                    color: SupervisorTheme.danger.withValues(alpha: 0.4)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: const Text('Decline'),
@@ -548,8 +600,47 @@ class _SupervisorRetripReviewScreenState
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white),
                     )
-                  : Text(isHousehold ? 'Assign new trip' : 'Re-Trip'),
+                  : const Text('Re-Trip'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _loadErrorCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: SupervisorTheme.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border:
+            Border.all(color: SupervisorTheme.danger.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Could not load remaining stops',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: SupervisorTheme.strongText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _loadError ?? 'Try again.',
+            style: const TextStyle(
+              fontSize: 12,
+              color: SupervisorTheme.mutedText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: _busy ? null : _loadDetail,
+            child: const Text('Retry'),
           ),
         ],
       ),

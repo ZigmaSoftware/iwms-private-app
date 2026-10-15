@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -55,8 +57,8 @@ class _TripLifecycleControlState extends State<TripLifecycleControl> {
       return _PendingRetripBanner(request: trip.retripRequest!);
     }
 
-    final isRunning = trip.isStarted &&
-        trip.status.toLowerCase() == 'in progress';
+    final isRunning =
+        trip.isStarted && trip.status.toLowerCase() == 'in progress';
 
     return SizedBox(
       width: double.infinity,
@@ -223,13 +225,35 @@ String _friendlyMessage(OperatorTripException e) {
 /// Shown in place of the Start/End button while a Re-Trip request raised
 /// from this trip awaits supervisor review. No button — the driver can keep
 /// collecting elsewhere on the same trip while they wait.
-class _PendingRetripBanner extends StatelessWidget {
+class _PendingRetripBanner extends StatefulWidget {
   const _PendingRetripBanner({required this.request});
 
   final OperatorTripRetripRequest request;
 
   @override
+  State<_PendingRetripBanner> createState() => _PendingRetripBannerState();
+}
+
+class _PendingRetripBannerState extends State<_PendingRetripBanner> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final request = widget.request;
     final pending = request.pendingBinCount + request.pendingHouseholdCount;
     return Container(
       width: double.infinity,
@@ -256,6 +280,19 @@ class _PendingRetripBanner extends StatelessWidget {
                     fontSize: 13.5,
                   ),
                 ),
+                if (request.expiryLabel().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    request.expiryLabel(),
+                    style: TextStyle(
+                      color: request.remaining() == Duration.zero
+                          ? CaptainTheme.danger
+                          : CaptainTheme.gold,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   pending > 0
@@ -534,7 +571,8 @@ void showStartRequiredSheet(BuildContext context) {
               ),
               elevation: 0,
             ),
-            child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text('Got it',
+                style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ),
       ],

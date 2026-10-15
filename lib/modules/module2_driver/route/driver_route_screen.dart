@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/api_config.dart';
 import '../../../core/map/map_style.dart';
+import '../../../core/map/safe_camera_fit.dart';
 import 'driver_route_controller.dart';
 
 class DriverRouteScreen extends StatelessWidget {
@@ -125,9 +126,6 @@ class _RouteMapState extends State<_RouteMap> {
             driver,
             if (destination != null) destination,
           ];
-    final bounds = points.isNotEmpty
-        ? LatLngBounds.fromPoints(points)
-        : LatLngBounds.fromPoints([driver, driver]);
 
     return Stack(
       children: [
@@ -137,14 +135,15 @@ class _RouteMapState extends State<_RouteMap> {
             initialCenter: driver,
             initialZoom: 15,
             onMapReady: () {
-              if (points.length > 1) {
-                _mapController.fitCamera(
-                  CameraFit.bounds(
-                    bounds: bounds,
-                    padding: const EdgeInsets.all(40),
-                  ),
-                );
-              }
+              // safeFitBounds falls back to a plain pan when every point
+              // collapses to the same spot (e.g. destination == driver, or a
+              // single-point route) — fitting a zero-size bounds otherwise
+              // crashes with "Infinity or NaN toInt" (see its doc comment).
+              safeFitBounds(
+                _mapController,
+                points,
+                padding: const EdgeInsets.all(40),
+              );
             },
           ),
           children: [

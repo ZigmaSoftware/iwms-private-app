@@ -15,7 +15,9 @@ import '../../../shared/widgets/home_base_marker.dart';
 import '../../../shared/widgets/tracking_view_shell.dart';
 
 class CitizenAllotedVehicleMapScreen extends StatefulWidget {
-  const CitizenAllotedVehicleMapScreen({super.key});
+  const CitizenAllotedVehicleMapScreen({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<CitizenAllotedVehicleMapScreen> createState() =>
@@ -411,8 +413,7 @@ class _CitizenAllotedVehicleMapScreenState
                   assignedVehicles.isNotEmpty ? assignedVehicles.first : null;
 
               final hasAssigned = assignedVehicle != null;
-              final errorMessage =
-                  state is VehicleError ? state.message : null;
+              final errorMessage = state is VehicleError ? state.message : null;
 
               // ---------------------------------------------------------------
               // Header Info
@@ -427,7 +428,8 @@ class _CitizenAllotedVehicleMapScreenState
                   : localizations.mapAwaitingAssignedVehicle;
 
               final statusPrimary = hasAssigned
-                  ? (assignedVehicle.lastUpdated ?? localizations.mapLiveTelemetry)
+                  ? (assignedVehicle.lastUpdated ??
+                      localizations.mapLiveTelemetry)
                   : localizations.mapNoLocationYet;
 
               final statusSecondary = localizations.mapVehicleCounts(
@@ -446,6 +448,7 @@ class _CitizenAllotedVehicleMapScreenState
                     height: headerHeight,
                     width: double.infinity,
                     child: TrackingHeroHeader(
+                      onBack: widget.onBack,
                       contextLabel: localizations.mapAssignedVehicle,
                       headline: headline,
                       statusPrimary: statusPrimary,
@@ -896,8 +899,7 @@ class _CitizenAllotedVehicleMapScreenState
 
               Row(
                 children: [
-                  Icon(Icons.access_time,
-                      color: theme.colorScheme.onSurface),
+                  Icon(Icons.access_time, color: theme.colorScheme.onSurface),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -972,7 +974,6 @@ class _CitizenAllotedVehicleMapScreenState
   Widget _buildGammaFacilityMarker() {
     return const HomeBaseMarker(size: 22); // Reduced
   }
-
 }
 
 // ============================================================================

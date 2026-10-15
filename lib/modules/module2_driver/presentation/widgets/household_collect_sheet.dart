@@ -18,6 +18,8 @@ import 'package:iwms_private_app/modules/module2_driver/presentation/state/scale
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/waste_type_visuals.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/generateunique_id.dart';
+import 'package:iwms_private_app/shared/services/collection_photo_proof_service.dart';
+import 'package:iwms_private_app/shared/widgets/collection_photo_permission_dialog.dart';
 
 /// In-drawer household collection.
 ///
@@ -82,6 +84,8 @@ class _WasteEntry {
 
   final TextEditingController weight = TextEditingController();
   File? photo;
+  double? captureLatitude;
+  double? captureLongitude;
 
   /// Set once the row has been POSTed. Holds the backend's `unique_id` so a
   /// re-edit becomes an update instead of a duplicate insert.
@@ -407,6 +411,8 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
     setState(() {
       entry.weight.clear();
       entry.photo = null;
+      entry.captureLatitude = null;
+      entry.captureLongitude = null;
       entry.addedWeight = null;
       // Back to untouched means the scale owns this row again.
       entry.isLocked = false;
@@ -463,6 +469,9 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
       entry.isLocked = true;
     });
     try {
+      FocusManager.instance.primaryFocus?.unfocus();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await const CollectionPhotoProofService().ensureCaptureReady();
       final shot = await _picker.pickImage(
         source: ImageSource.camera,
         imageQuality: 70,
@@ -474,10 +483,25 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
         maxHeight: 1280,
       );
       if (shot == null || !mounted) return;
-      setState(() => entry.photo = File(shot.path));
+      final proof = await const CollectionPhotoProofService().stamp(
+        source: File(shot.path),
+        wasteType: entry.name,
+        stopLabel: widget.customerName,
+        assignmentId: widget.assignmentId,
+        weightKg: latchedWeight,
+      );
+      if (!mounted) return;
+      setState(() {
+        entry.photo = proof.file;
+        entry.captureLatitude = proof.latitude;
+        entry.captureLongitude = proof.longitude;
+      });
+      AppFlash.success(context, 'Geotagged collection proof captured');
       await _add(entry, weight: latchedWeight);
+    } on CollectionPhotoProofException catch (e) {
+      if (mounted) await handleCollectionPhotoProofFailure(context, e);
     } catch (e) {
-      if (mounted) AppFlash.error(context, 'Could not open camera: $e');
+      if (mounted) AppFlash.error(context, 'Could not process photo: $e');
     } finally {
       // Release the capture guard, but KEEP isLocked: the weight is committed
       // (or the driver cancelled the camera with the number still on screen)
@@ -529,8 +553,10 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
         // Scopes the guard on the backend to this trip: insert-waste-sub
         // rejects a household that is not a stop on it.
         ..fields['assignment_id'] = widget.assignmentId ?? ''
-        ..fields['latitude'] = widget.latitude
-        ..fields['longitude'] = widget.longitude;
+        ..fields['latitude'] =
+            (entry.captureLatitude?.toStringAsFixed(6) ?? widget.latitude)
+        ..fields['longitude'] =
+            (entry.captureLongitude?.toStringAsFixed(6) ?? widget.longitude);
 
       if (isUpdate) request.fields['unique_id'] = entry.remoteUniqueId!;
       request.files.add(
@@ -939,7 +965,9 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  added ? '${_fmt(entry.addedWeight!)} kg' : 'Tap to add weight',
+                  added
+                      ? '${_fmt(entry.addedWeight!)} kg'
+                      : 'Tap to add weight',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -996,25 +1024,79 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
     final photo = entry.photo;
     final radius = BorderRadius.circular(12);
     if (photo != null) {
-      return ClipRRect(
-        borderRadius: radius,
-        child: Image.file(
-          photo,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          // Decode to roughly the size actually painted (2x for crispness on
-          // hi-dpi) instead of the full bitmap — without this every visible
-          // thumbnail held a full-resolution decode in the image cache.
-          cacheWidth: (size * 2).round(),
-          cacheHeight: (size * 2).round(),
-          // A picked file can disappear from the OS cache before the widget
-          // rebuilds; fall back to the icon plate rather than a broken box.
-          errorBuilder: (_, __, ___) => _iconPlate(accent, visual, size),
+      return GestureDetector(
+        onTap: () => _showPhotoPreview(photo),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Image.file(
+            photo,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            // Decode to roughly the size actually painted (2x for crispness on
+            // hi-dpi) instead of the full bitmap — without this every visible
+            // thumbnail held a full-resolution decode in the image cache.
+            cacheWidth: (size * 2).round(),
+            cacheHeight: (size * 2).round(),
+            // A picked file can disappear from the OS cache before the widget
+            // rebuilds; fall back to the icon plate rather than a broken box.
+            errorBuilder: (_, __, ___) => _iconPlate(accent, visual, size),
+          ),
         ),
       );
     }
     return _iconPlate(accent, visual, size);
+  }
+
+  /// Floating full-size preview of a captured waste photo — tap the thumbnail
+  /// to inspect it (e.g. confirm the right bin/weight was photographed)
+  /// before submitting. Dismiss by tapping the scrim, the close button, or
+  /// the system back gesture.
+  void _showPhotoPreview(File photo) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Image.file(photo, fit: BoxFit.contain),
+                ),
+              ),
+              Positioned(
+                top: -12,
+                right: -12,
+                child: Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  elevation: 4,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.of(dialogContext).pop(),
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(Icons.close_rounded,
+                          size: 22, color: Colors.black87),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Widget _iconPlate(Color accent, WasteTypeVisual visual, double size) {

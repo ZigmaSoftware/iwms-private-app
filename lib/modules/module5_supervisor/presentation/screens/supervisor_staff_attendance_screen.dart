@@ -52,7 +52,7 @@ class _SupervisorStaffAttendanceScreenState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Failed to load staff';
+        _error = e.toString();
         _loading = false;
       });
     }

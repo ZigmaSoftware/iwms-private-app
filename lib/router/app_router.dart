@@ -190,8 +190,17 @@ class AppRouter {
         ),
         GoRoute(
           path: AppRoutePaths.citizenGrievanceChat,
-          builder: (context, state) =>
-              CitizenTheme.wrap(context, const GrievanceChatScreen()),
+          builder: (context, state) {
+            // Optional pre-fill: {'categoryCode': ..., 'description': ...}.
+            final extra = state.extra is Map ? state.extra as Map : const {};
+            return CitizenTheme.wrap(
+              context,
+              GrievanceChatScreen(
+                initialCategoryCode: extra['categoryCode']?.toString(),
+                initialDescription: extra['description']?.toString(),
+              ),
+            );
+          },
         ),
         GoRoute(
           path: AppRoutePaths.citizenGrievanceStatus,

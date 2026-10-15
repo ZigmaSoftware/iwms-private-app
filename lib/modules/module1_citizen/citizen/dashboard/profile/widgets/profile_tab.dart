@@ -124,13 +124,6 @@ class ProfileTab extends StatelessWidget {
               //   highlightColor: highlightColor,
               // ),
               _ProfileTile(
-                icon: Icons.location_on_outlined,
-                label: localizations.trackWaste,
-                onTap: () => context.push(AppRoutePaths.citizenMap),
-                textColor: textColor,
-                highlightColor: highlightColor,
-              ),
-              _ProfileTile(
                 icon: Icons.feedback_outlined,
                 label: localizations.raiseGrievance,
                 onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),

@@ -277,15 +277,29 @@ class _DriverHeaderState extends State<DriverHeader> {
               ),
               const SizedBox(width: 3),
               Flexible(
-                child: Text(
-                  location,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Ward: ',
+                        style: TextStyle(
+                          fontSize: compact ? 10.5 : 12.5,
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      TextSpan(
+                        text: location,
+                        style: TextStyle(
+                          fontSize: compact ? 10.5 : 12.5,
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: compact ? 10.5 : 12.5,
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontWeight: FontWeight.w600,
-                  ),
                 ),
               ),
             ],

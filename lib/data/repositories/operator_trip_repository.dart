@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
@@ -51,6 +52,8 @@ class OperatorTripException implements Exception {
 }
 
 class OperatorTripRepository {
+  List<OperatorServiceNotice> lastServiceNotices = const [];
+
   /// The waste streams saved against this customer in Customer Creation
   /// (`CustomerCreation.waste_types`), in the backend's display order — Wet,
   /// then Dry, then the rest alphabetically. Returns an empty list when the
@@ -107,6 +110,14 @@ class OperatorTripRepository {
       final results = data is Map && data['results'] is List
           ? data['results'] as List
           : const <dynamic>[];
+      final notices = data is Map && data['service_notices'] is List
+          ? data['service_notices'] as List
+          : const <dynamic>[];
+      lastServiceNotices = notices
+          .whereType<Map>()
+          .map((e) =>
+              OperatorServiceNotice.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false);
       return results
           .map((e) => OperatorTripToday.fromJson(
                 Map<String, dynamic>.from(e as Map),
@@ -132,16 +143,17 @@ class OperatorTripRepository {
       );
 
   /// Household counterpart to [fetchCollectionPointsPage].
-  Future<TripStopsPage<OperatorTripHouseholdStop>> fetchHouseholdCollectionsPage(
+  Future<TripStopsPage<OperatorTripHouseholdStop>>
+      fetchHouseholdCollectionsPage(
     String assignmentId,
     int page,
   ) =>
-      _fetchTripStopsPage(
-        assignmentId: assignmentId,
-        type: 'household',
-        page: page,
-        fromJson: OperatorTripHouseholdStop.fromJson,
-      );
+          _fetchTripStopsPage(
+            assignmentId: assignmentId,
+            type: 'household',
+            page: page,
+            fromJson: OperatorTripHouseholdStop.fromJson,
+          );
 
   Future<TripStopsPage<T>> _fetchTripStopsPage<T>({
     required String assignmentId,
@@ -185,19 +197,31 @@ class OperatorTripRepository {
     required String assignmentId,
     String? latitude,
     String? longitude,
+    File? evidenceImage,
   }) async {
+    // A household with no saved location arrives here as "NaN"; sending it
+    // makes the server reject the whole status update.
+    String? coordinate(String? raw) {
+      final value = double.tryParse(raw?.trim() ?? '');
+      return value != null && value.isFinite ? raw!.trim() : null;
+    }
+
+    latitude = coordinate(latitude);
+    longitude = coordinate(longitude);
     final dio = await authorizedDio();
     try {
       await dio.post(
         ApiConfig.householdCollectionMarkStatus,
-        data: {
+        data: FormData.fromMap({
           'customer_id': customerId,
           'status': status,
           'reason': reason,
           'assignment_id': assignmentId,
-          if (latitude != null && latitude.isNotEmpty) 'latitude': latitude,
-          if (longitude != null && longitude.isNotEmpty) 'longitude': longitude,
-        },
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
+          if (evidenceImage != null)
+            'evidence_image': await MultipartFile.fromFile(evidenceImage.path),
+        }),
       );
     } on DioException catch (e) {
       _throwDio(e);
@@ -227,12 +251,13 @@ class OperatorTripRepository {
     double? longitude,
     String? notes,
     String? statusReason,
+    File? evidenceImage,
   }) async {
     final dio = await authorizedDio();
     try {
       final resp = await dio.post(
         ApiConfig.operatorScanBin,
-        data: {
+        data: FormData.fromMap({
           'bin_qr': binQr,
           'action': action,
           if (weightKg != null) 'weight_kg': weightKg.toStringAsFixed(2),
@@ -241,7 +266,9 @@ class OperatorTripRepository {
           if (notes != null && notes.isNotEmpty) 'notes': notes,
           if (statusReason != null && statusReason.isNotEmpty)
             'status_reason': statusReason,
-        },
+          if (evidenceImage != null)
+            'evidence_image': await MultipartFile.fromFile(evidenceImage.path),
+        }),
       );
       return BinScanSubmitResult.fromJson(
         Map<String, dynamic>.from(resp.data as Map),
