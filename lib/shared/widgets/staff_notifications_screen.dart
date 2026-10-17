@@ -134,6 +134,8 @@ class _StaffNotificationsScreenState extends State<StaffNotificationsScreen> {
         return Icons.swap_horiz_rounded;
       case 'CUSTOMER_AVAILABLE':
         return Icons.how_to_reg_rounded;
+      case 'TRIP_ASSIGNED':
+        return Icons.assignment_turned_in_rounded;
       default:
         return Icons.notifications_rounded;
     }

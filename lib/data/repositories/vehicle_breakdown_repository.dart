@@ -93,8 +93,11 @@ class VehicleBreakdownRepository {
         'breakdown_vehicle_id': breakdownVehicleId,
         'breakdown_reason': breakdownReason,
         'breakdown_time': _fmtTime(breakdownTime),
-        if (breakdownLat != null) 'breakdown_lat': breakdownLat,
-        if (breakdownLng != null) 'breakdown_lng': breakdownLng,
+        // The server stores 7 decimal places (10 digits); raw GPS has more.
+        if (breakdownLat != null && breakdownLat.isFinite)
+          'breakdown_lat': breakdownLat.toStringAsFixed(7),
+        if (breakdownLng != null && breakdownLng.isFinite)
+          'breakdown_lng': breakdownLng.toStringAsFixed(7),
         if (breakdownLocation != null && breakdownLocation.trim().isNotEmpty)
           'breakdown_location': breakdownLocation,
         if (collectedWeightBeforeBreakdownKg != null)

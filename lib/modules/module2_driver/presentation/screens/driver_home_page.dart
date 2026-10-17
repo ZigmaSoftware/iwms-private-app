@@ -202,7 +202,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _refreshUnreadNotificationCount();
       }
       if ((data['type'] == 'NO_COLLECTION_TODAY' ||
-              data['type'] == 'COLLECTION_RESTORED') &&
+              data['type'] == 'COLLECTION_RESTORED' ||
+              data['type'] == 'TRIP_ASSIGNED') &&
           mounted) {
         _loadAssignmentsForDriver();
         _refreshUnreadNotificationCount();

@@ -24,6 +24,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
     this.serverNow,
     this.historical = false,
     this.onNoCollection,
+    this.onAlertHandled,
   });
 
   final SupervisorAssignment assignment;
@@ -43,6 +44,10 @@ class SupervisorAssignmentCard extends StatelessWidget {
   final DateTime? serverNow;
   final bool historical;
   final VoidCallback? onNoCollection;
+
+  /// Refreshes the host after a review screen opened from the alerts sheet
+  /// (breakdown, delay, Re-Trip) returns.
+  final VoidCallback? onAlertHandled;
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +84,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
                 alerts: alerts,
                 onOpenTrip: onTap,
                 onTripActions: a.isRemaining ? onActions : null,
+                onChanged: onAlertHandled,
               ),
             ),
       children: [

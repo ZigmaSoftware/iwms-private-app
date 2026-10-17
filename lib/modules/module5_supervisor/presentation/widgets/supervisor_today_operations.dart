@@ -235,8 +235,37 @@ class _SupervisorTodayOperationsState extends State<SupervisorTodayOperations> {
     );
   }
 
+  /// Today's live trip for [plan]. A plan can hold several trips in a day (a
+  /// cancelled run, a Re-Trip continuation), so prefer the one in progress,
+  /// then scheduled, then completed — newest first — over whichever single
+  /// id the plan list happened to report.
   SupervisorAssignment? _assignmentFor(SupervisorPlanOption plan) {
-    if (plan.assignmentId == null || plan.noCollection) return null;
+    if (plan.noCollection) return null;
+    final now = DateTime.now();
+    bool today(SupervisorAssignment a) =>
+        a.tripDate != null &&
+        a.tripDate!.year == now.year &&
+        a.tripDate!.month == now.month &&
+        a.tripDate!.day == now.day;
+    int rank(SupervisorAssignment a) => a.isInProgress
+        ? 0
+        : a.isScheduled
+            ? 1
+            : a.isCompleted
+                ? 2
+                : 3;
+    final candidates = widget.assignments
+        .where((a) =>
+            plan.tripPlanId.isNotEmpty &&
+            a.tripPlanId == plan.tripPlanId &&
+            today(a) &&
+            !a.isCancelled)
+        .toList()
+      ..sort((a, b) {
+        final byRank = rank(a).compareTo(rank(b));
+        return byRank != 0 ? byRank : b.tripCount.compareTo(a.tripCount);
+      });
+    if (candidates.isNotEmpty) return candidates.first;
     for (final a in widget.assignments) {
       if (a.uniqueId == plan.assignmentId) return a;
     }
@@ -273,6 +302,7 @@ class _SupervisorTodayOperationsState extends State<SupervisorTodayOperations> {
             assignmentId: a.uniqueId, assignment: a);
         if (changed == true && mounted) await widget.onChanged();
       },
+      onAlertHandled: () => widget.onChanged(),
       onNoCollection: plan.canDeclareNoCollection && !_submitting
           ? () => _declareNoCollection(plan)
           : null,

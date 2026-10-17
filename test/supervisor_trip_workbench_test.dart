@@ -478,6 +478,76 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('breakdown and delay alerts carry their report id and photos', () {
+    final json = tripJson('t-ev', 'In Progress')
+      ..['breakdown_info'] = {
+        'unique_id': 'BD-1',
+        'approval_status': 'PENDING',
+        'photos': ['http://x/bd.jpg'],
+      }
+      ..['trip_events'] = [
+        {
+          'label': 'Delay: Puncture / Tyre',
+          'status': 'REPORTED',
+          'kind': 'delay',
+          'unique_id': 'TDR-1',
+          'image': 'http://x/delay.jpg',
+        },
+      ];
+    final alerts =
+        SupervisorAssignment.fromJson(json).alerts(DateTime(2026, 9, 9, 10));
+    final bd = alerts.singleWhere((a) => a.kind == TripAlertKind.breakdown);
+    final delay = alerts.singleWhere((a) => a.kind == TripAlertKind.delay);
+    expect(bd.refId, 'BD-1');
+    expect(bd.imageUrls, ['http://x/bd.jpg']);
+    expect(delay.refId, 'TDR-1');
+    expect(delay.imageUrls, ['http://x/delay.jpg']);
+  });
+
+  testWidgets('home card follows the plan\'s live trip, not a stale id',
+      (tester) async {
+    final now = DateTime.now();
+    final today =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    SupervisorAssignment tripFor(String id, String status) =>
+        SupervisorAssignment.fromJson(
+            tripJson(id, status, date: today)..['trip_plan_id'] = 'plan-1');
+    final repo = FakeTrips(board([]))
+      ..todayPlans = const [
+        SupervisorPlanOption(
+          tripPlanId: 'plan-1',
+          displayCode: 'PLAN-1',
+          collectionType: 'household_collection',
+          scheduledTime: '10:43',
+          state: 'Cancelled',
+          assignmentId: 'old-cancelled',
+          vehicleNo: 'KL 01 1234',
+          teamCode: 'T-1',
+          driverName: 'Test driver',
+          operatorName: '',
+          areaName: 'Ward B',
+        ),
+      ];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: SupervisorTodayOperations(
+            updatedAt: null,
+            assignments: [
+              tripFor('old-cancelled', 'Cancelled'),
+              tripFor('live', 'In Progress'),
+            ],
+            repository: repo,
+            onChanged: () async {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('In progress'), findsOneWidget);
+    expect(find.text('Cancelled'), findsNothing);
+  });
+
   testWidgets('a completed trip collapses to one summary row',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

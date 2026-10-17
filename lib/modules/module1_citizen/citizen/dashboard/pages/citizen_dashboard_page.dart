@@ -51,6 +51,10 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     with TickerProviderStateMixin {
   late final BannerController _bannerController;
   late final TrackController _trackController;
+
+  /// The home summary card's own copy, always today's waste. Kept separate
+  /// so the period/date filters on the Track tab never change the home card.
+  late final TrackController _homeSummaryController;
   late final NotificationController _notificationController;
   late final HomeNavController _navController;
   final ValueNotifier<int> _pickupRefresh = ValueNotifier<int>(0);
@@ -74,6 +78,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       fallbackSlides: _fallbackSlides,
     );
     _trackController = TrackController(TrackService());
+    _homeSummaryController = TrackController(TrackService());
     _notificationController = getIt<NotificationController>();
     _navController = HomeNavController();
     _geofenceEvaluator = const GeofenceEvaluator();
@@ -81,6 +86,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
 
     unawaited(_bannerController.initialize());
     unawaited(_trackController.refresh(force: true));
+    unawaited(_homeSummaryController.refresh(force: true));
     _loadUserId();
   }
 
@@ -146,6 +152,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     _pickupRefresh.dispose();
     _bannerController.dispose();
     _trackController.dispose();
+    _homeSummaryController.dispose();
     _navController.dispose();
     super.dispose();
   }
@@ -241,7 +248,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
         case BottomNavItem.home:
           return HomeTab(
             bannerController: _bannerController,
-            trackController: _trackController,
+            trackController: _homeSummaryController,
             notificationController: _notificationController,
             quickActions: quickActions,
             userName: normalizedName,
@@ -261,7 +268,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
             onRefresh: () async {
               _pickupRefresh.value++;
               await Future.wait([
-                _trackController.refresh(force: true),
+                _homeSummaryController.refresh(force: true),
                 _bannerController.refresh(),
               ]);
             },

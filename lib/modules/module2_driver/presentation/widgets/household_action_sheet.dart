@@ -71,10 +71,14 @@ Future<bool> showHouseholdActionSheet(
       assignmentId: assignmentId,
       // Close this drawer first, then hand the chosen exception back so the
       // reason sheet isn't fighting the collect drawer for the screen.
-      onSecondaryAction: (chosen) {
-        secondaryAction = chosen;
-        Navigator.of(sheetCtx).pop(false);
-      },
+      // A collected stop has its weight recorded; the server refuses to turn
+      // it into Collect later / Not available, so don't offer them.
+      onSecondaryAction: normalizedStatus == 'collected'
+          ? null
+          : (chosen) {
+              secondaryAction = chosen;
+              Navigator.of(sheetCtx).pop(false);
+            },
     ),
   );
 

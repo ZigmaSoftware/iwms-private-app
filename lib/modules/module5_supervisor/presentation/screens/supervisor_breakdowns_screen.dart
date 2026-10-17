@@ -10,7 +10,11 @@ import 'package:iwms_private_app/shared/widgets/keyboard_safe_bottom_sheet.dart'
 /// approval — reachable from the Dashboard's "Breakdowns" quick-action tile
 /// and from the header bell icon.
 class SupervisorBreakdownsScreen extends StatefulWidget {
-  const SupervisorBreakdownsScreen({super.key});
+  const SupervisorBreakdownsScreen({super.key, this.breakdownId});
+
+  /// Show only this report — used when a trip card's alert opens the exact
+  /// breakdown to review.
+  final String? breakdownId;
 
   @override
   State<SupervisorBreakdownsScreen> createState() =>
@@ -38,7 +42,10 @@ class _SupervisorBreakdownsScreenState
       _error = null;
     });
     try {
-      final reports = await _repo.fetchBreakdowns(mine: true);
+      final all = await _repo.fetchBreakdowns(mine: true);
+      final id = widget.breakdownId;
+      final reports =
+          id == null ? all : all.where((r) => r.uniqueId == id).toList();
       if (!mounted) return;
       setState(() {
         _reports = reports;
@@ -121,7 +128,8 @@ class _SupervisorBreakdownsScreenState
       appBar: AppBar(
         backgroundColor: SupervisorTheme.primary,
         foregroundColor: Colors.white,
-        title: const Text('Breakdowns'),
+        title: Text(
+            widget.breakdownId == null ? 'Breakdowns' : 'Vehicle breakdown'),
       ),
       body: _body(),
     );

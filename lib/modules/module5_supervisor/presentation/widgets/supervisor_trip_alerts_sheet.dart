@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_breakdowns_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_delay_review_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_retrip_requests_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_photo_viewer.dart';
 
 /// Bottom sheet listing every alert on one trip, "Grouped list" layout
 /// (sheet 1 in the trip-card variants artifact): "Needs your action" rows
@@ -15,6 +17,7 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
     required this.alerts,
     this.onOpenTrip,
     this.onTripActions,
+    this.onChanged,
   });
 
   final String title;
@@ -23,6 +26,10 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
   final VoidCallback? onOpenTrip;
   final VoidCallback? onTripActions;
 
+  /// Called after a review screen opened from here returns, so the card can
+  /// refresh (a resolved delay or reviewed breakdown drops off the list).
+  final VoidCallback? onChanged;
+
   static Future<void> show(
     BuildContext context, {
     required String title,
@@ -30,6 +37,7 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
     required List<SupervisorTripAlert> alerts,
     VoidCallback? onOpenTrip,
     VoidCallback? onTripActions,
+    VoidCallback? onChanged,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -45,6 +53,7 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
         alerts: alerts,
         onOpenTrip: onOpenTrip,
         onTripActions: onTripActions,
+        onChanged: onChanged,
       ),
     );
   }
@@ -143,25 +152,31 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
       );
 
   ({String label, VoidCallback onPressed})? _action(
-      BuildContext context, TripAlertKind kind) {
+      BuildContext context, SupervisorTripAlert alert) {
+    final kind = alert.kind;
     void then(VoidCallback? next) {
       Navigator.of(context).pop();
       next?.call();
     }
 
     final navigator = Navigator.of(context);
+    Future<void> open(Widget screen) async {
+      await navigator.push(MaterialPageRoute(builder: (_) => screen));
+      onChanged?.call();
+    }
+
     switch (kind) {
       case TripAlertKind.breakdown:
         return (
           label: 'Review',
-          onPressed: () => then(() => navigator.push(MaterialPageRoute(
-              builder: (_) => const SupervisorBreakdownsScreen()))),
+          onPressed: () => then(
+              () => open(SupervisorBreakdownsScreen(breakdownId: alert.refId))),
         );
       case TripAlertKind.retrip:
         return (
           label: 'Decide',
-          onPressed: () => then(() => navigator.push(MaterialPageRoute(
-              builder: (_) => const SupervisorRetripRequestsScreen()))),
+          onPressed: () =>
+              then(() => open(const SupervisorRetripRequestsScreen())),
         );
       case TripAlertKind.rejected:
       case TripAlertKind.noDriver:
@@ -171,8 +186,18 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
           label: kind == TripAlertKind.rejected ? 'Resolve' : 'Assign',
           onPressed: () => then(onTripActions),
         );
-      case TripAlertKind.startOverdue:
       case TripAlertKind.delay:
+        final id = alert.refId;
+        if (id != null && id.isNotEmpty) {
+          return (
+            label: 'Review',
+            onPressed: () =>
+                then(() => open(SupervisorDelayReviewScreen(reportId: id))),
+          );
+        }
+        if (onOpenTrip == null) return null;
+        return (label: 'View', onPressed: () => then(onOpenTrip));
+      case TripAlertKind.startOverdue:
         if (onOpenTrip == null) return null;
         return (label: 'View', onPressed: () => then(onOpenTrip));
       case TripAlertKind.customersWaiting:
@@ -183,7 +208,7 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
 
   Widget _actionRow(BuildContext context, SupervisorTripAlert a) {
     final tone = AlertTone.of(a.severity);
-    final action = _action(context, a.kind);
+    final action = _action(context, a);
     final tag = [
       a.severity == TripAlertSeverity.critical ? 'Critical' : 'Warning',
       if (a.time != null) a.time!,
@@ -216,6 +241,10 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
                 fontSize: 14, fontWeight: FontWeight.w700, color: _fg)),
         if (a.detail.isNotEmpty)
           Text(a.detail, style: const TextStyle(fontSize: 12, color: _muted)),
+        if (a.imageUrls.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          SupervisorPhotoStrip(urls: a.imageUrls),
+        ],
       ],
     );
   }

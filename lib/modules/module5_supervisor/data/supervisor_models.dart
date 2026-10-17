@@ -202,6 +202,8 @@ class SupervisorTripAlert {
     this.detail = '',
     this.time,
     this.waitingStops = const [],
+    this.refId,
+    this.imageUrls = const [],
   });
 
   final TripAlertKind kind;
@@ -216,6 +218,13 @@ class SupervisorTripAlert {
 
   /// Only for [TripAlertKind.customersWaiting].
   final List<SupervisorStop> waitingStops;
+
+  /// The breakdown / delay report this alert is about, so the sheet can open
+  /// that exact record.
+  final String? refId;
+
+  /// Evidence photos the driver attached.
+  final List<String> imageUrls;
 
   /// Customers waiting count once per customer, everything else once.
   int get count => waitingStops.isEmpty ? 1 : waitingStops.length;
@@ -382,6 +391,7 @@ class SupervisorAssignment {
     this.tripLogSummary = const {},
     this.staffSource = '',
     this.tripEvents = const [],
+    this.tripPlanId = '',
   });
 
   final String uniqueId;
@@ -424,6 +434,9 @@ class SupervisorAssignment {
   final Map<String, dynamic> tripLogSummary;
   final String staffSource;
   final List<Map<String, dynamic>> tripEvents;
+
+  /// The Trip Plan this daily trip was generated from.
+  final String tripPlanId;
 
   bool get isRemaining => !isCompleted && !isCancelled;
   int get collectedCount => stops.where((s) => s.isCollected).length;
@@ -471,6 +484,11 @@ class SupervisorAssignment {
           breakdownInfo['breakdown_vehicle_no'] ?? vehicleNo,
         ].where((v) => v != null && v.toString().trim().isNotEmpty).join(' · '),
         time: _clock(breakdownInfo['breakdown_time']),
+        refId: breakdownInfo['unique_id']?.toString(),
+        imageUrls: (breakdownInfo['photos'] as List? ?? const [])
+            .map((u) => u.toString())
+            .where((u) => u.isNotEmpty)
+            .toList(),
       ));
     }
     if (hasPendingRetrip) {
@@ -547,6 +565,10 @@ class SupervisorAssignment {
             .where((v) => v != null && v.toString().trim().isNotEmpty)
             .join(' · '),
         time: _clock(e['at']),
+        refId: e['unique_id']?.toString(),
+        imageUrls: [
+          if ((e['image']?.toString() ?? '').isNotEmpty) e['image'].toString(),
+        ],
       ));
     }
     final waiting = stops.where((s) => s.customerWaiting).toList();
@@ -727,6 +749,9 @@ class SupervisorAssignment {
       tripLogSummary: Map<String, dynamic>.from(
           json['trip_log_summary'] as Map? ?? const {}),
       staffSource: staff['source']?.toString() ?? '',
+      tripPlanId: json['trip_plan_id']?.toString() ??
+          tripPlan['unique_id']?.toString() ??
+          '',
       tripEvents: (json['trip_events'] as List? ?? const [])
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))

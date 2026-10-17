@@ -488,6 +488,8 @@ class _SupervisorTripsScreenState extends State<SupervisorTripsScreen> {
                                   vehicleNo: a.vehicleNo,
                                   tripDate: a.tripDate)))
                           : null,
+                      onAlertHandled: () =>
+                          context.read<SupervisorBloc>().refresh(),
                       onActions: () async {
                         await SupervisorTripActionsSheet.show(context,
                             assignmentId: a.uniqueId, assignment: a);
