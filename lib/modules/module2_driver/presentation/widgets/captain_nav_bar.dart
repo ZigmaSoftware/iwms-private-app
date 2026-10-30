@@ -2,7 +2,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
-import 'package:iwms_private_app/modules/module3_operator/utils/attendance_blink_store.dart';
 
 const double kCaptainNavBarHeight = 68;
 const double kCaptainNavBarHorizontalPadding = 0;
@@ -17,7 +16,7 @@ const double kCaptainProfileBottomSpacer = 94;
 ///
 /// Rules carried over from the original version: big tap targets (full slot
 /// height), icon + always-visible label, glass blur, animated indicator pill,
-/// and the attendance blink badge so a due check-in is impossible to miss.
+/// and a steady icon treatment for each tab.
 class CaptainNavBar extends StatelessWidget {
   const CaptainNavBar({
     super.key,
@@ -93,12 +92,10 @@ class CaptainNavItem {
   const CaptainNavItem({
     required this.icon,
     required this.label,
-    this.blink = false,
   });
 
   final IconData icon;
   final String label;
-  final bool blink;
 }
 
 class _CaptainNavTab extends StatelessWidget {
@@ -176,43 +173,7 @@ class _TabIcon extends StatelessWidget {
       child: Icon(item.icon, color: color, size: 22),
     );
 
-    if (!item.blink) return icon;
-
-    return ValueListenableBuilder<bool>(
-      valueListenable: AttendanceBlinkStore.notifier,
-      builder: (context, isBlinking, _) {
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            icon,
-            if (isBlinking)
-              Positioned(
-                right: -3,
-                top: -3,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: CaptainTheme.danger,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: CaptainTheme.surface,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: CaptainTheme.danger.withValues(alpha: 0.6),
-                        blurRadius: 4,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
+    return icon;
   }
 }
 

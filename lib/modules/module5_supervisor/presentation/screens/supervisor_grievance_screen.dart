@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/network/permission_error.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/shared/services/notification_service.dart';
 import 'package:iwms_private_app/data/models/grievance_ticket_model.dart';
@@ -47,10 +48,36 @@ String _fmt(DateTime? d) =>
 
 const _finalCodes = {'RESOLVED', 'CLOSED', 'REJECTED', 'CANCELLED'};
 
+/// Coarse "1d 4h" / "22m" label for how long until this ticket escalates to
+/// the next level of the project's staff hierarchy — or, once
+/// [GrievanceTicket.isEscalationOverdue], how long it has been sitting past
+/// that deadline. Null when there is no deadline to show: the ticket is
+/// resolved/closed, or it is already at the top of the hierarchy with nowhere
+/// further to go.
+String? _escalationDueLabel(GrievanceTicket t) {
+  final remaining = t.timeToEscalation;
+  if (remaining == null) return null;
+
+  final abs = remaining.abs();
+  if (abs.inDays >= 1) {
+    final hours = abs.inHours % 24;
+    return hours == 0 ? '${abs.inDays}d' : '${abs.inDays}d ${hours}h';
+  }
+  if (abs.inHours >= 1) {
+    final minutes = abs.inMinutes % 60;
+    return minutes == 0 ? '${abs.inHours}h' : '${abs.inHours}h ${minutes}m';
+  }
+  return '${abs.inMinutes}m';
+}
+
 class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
   final _repo = SupervisorGrievanceRepository();
   List<GrievanceTicket> _tickets = [];
   bool _loading = true;
+
+  /// Why the last load failed, if it did. A silent catch here meant a
+  /// permission denial looked exactly like 'no grievances yet'.
+  String? _loadError;
   bool _busy = false;
   String _filter = 'all'; // all | raised | pending | escalated | resolved
   Timer? _poll;
@@ -78,11 +105,18 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
       setState(() {
         _tickets = list;
         _loading = false;
+        _loadError = null;
       });
       _knownIds = list.map((t) => t.uniqueId).toSet();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadError = describeRequestFailure(
+          error,
+          fallback: 'Could not load grievances. Pull down to try again.',
+        );
+      });
     }
   }
 
@@ -113,7 +147,13 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
       if (_filter == 'pending') {
         return c == 'ASSIGNED' || c == 'IN_PROGRESS';
       }
-      if (_filter == 'escalated') return c == 'ESCALATED';
+      // A breach sets both the ESCALATED status and `is_escalated`. Checking
+      // the flag too keeps this bucket correct on a deployment whose status
+      // masters were never seeded with ESCALATED, where the status silently
+      // stays put while the ticket really has moved up a level.
+      if (_filter == 'escalated') {
+        return c == 'ESCALATED' || (t.isEscalated && !_finalCodes.contains(c));
+      }
       if (_filter == 'resolved') return _finalCodes.contains(c);
       return true;
     }).toList();
@@ -121,16 +161,22 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
 
   int _count(bool Function(GrievanceTicket) f) => _tickets.where(f).length;
 
-  Future<void> _runAction(String label, Future<void> Function() fn) async {
+  Future<void> _runAction(
+    String label,
+    Future<void> Function() fn, {
+    VoidCallback? afterSuccess,
+  }) async {
     setState(() => _busy = true);
     try {
       await fn();
       if (!mounted) return;
       AppFlash.success(context, '$label ✓');
+      afterSuccess?.call();
       await _load();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      AppFlash.error(context, '$label failed');
+      AppFlash.error(
+          context, describeRequestFailure(error, fallback: '$label failed'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -244,7 +290,13 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
   Future<void> _onResolve(GrievanceTicket t) async {
     final note = await _askRemarks('Resolve ${t.ticketNo}');
     if (note == null) return;
-    _runAction('Resolved', () => _repo.resolve(t.uniqueId, note));
+    _runAction(
+      'Resolved',
+      () => _repo.resolve(t.uniqueId, note),
+      afterSuccess: () {
+        if (_filter == 'all') _filter = 'pending';
+      },
+    );
   }
 
   Future<void> _openDetail(GrievanceTicket summary) async {
@@ -287,10 +339,28 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
                             children: [
                               const SizedBox(height: 140),
                               Center(
-                                child: Text(
-                                  'No grievances here.',
-                                  style: TextStyle(
-                                    color: SupervisorTheme.mutedText,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      if (_loadError != null)
+                                        Icon(
+                                          Icons.lock_outline_rounded,
+                                          color: SupervisorTheme.mutedText,
+                                          size: 32,
+                                        ),
+                                      if (_loadError != null)
+                                        const SizedBox(height: 12),
+                                      Text(
+                                        _loadError ?? 'No grievance',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: SupervisorTheme.mutedText,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -339,7 +409,11 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
       _GrievanceSummaryCardData(
         key: 'escalated',
         label: 'Escalated',
-        count: _count((t) => t.statusCode == 'ESCALATED'),
+        count: _count(
+          (t) =>
+              t.statusCode == 'ESCALATED' ||
+              (t.isEscalated && !_finalCodes.contains(t.statusCode)),
+        ),
         icon: Icons.trending_up_rounded,
         color: SupervisorTheme.danger,
       ),
@@ -575,8 +649,18 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
             Icons.folder_outlined,
             '${t.categoryName ?? '-'}${t.subcategoryName != null ? ' › ${t.subcategoryName}' : ''}',
           ),
-          if (t.assignedStaffName != null)
-            _meta(Icons.engineering_outlined, t.assignedStaffName!),
+          if (t.handlerName != null)
+            _meta(Icons.engineering_outlined, t.handlerName!),
+          if (_escalationDueLabel(t) != null)
+            _meta(
+              t.isEscalationOverdue
+                  ? Icons.warning_amber_rounded
+                  : Icons.timer_outlined,
+              t.isEscalationOverdue
+                  ? 'Escalation overdue by ${_escalationDueLabel(t)}'
+                  : 'Escalates in ${_escalationDueLabel(t)}',
+              color: t.isEscalationOverdue ? SupervisorTheme.danger : null,
+            ),
           if ((t.locationText ?? '').isNotEmpty)
             _meta(Icons.place_outlined, t.locationText!),
           _meta(Icons.schedule, _fmt(t.createdAt)),
@@ -630,18 +714,20 @@ class _SupervisorGrievanceScreenState extends State<SupervisorGrievanceScreen> {
     );
   }
 
-  Widget _meta(IconData icon, String text) => Padding(
+  Widget _meta(IconData icon, String text, {Color? color}) => Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Row(
           children: [
-            Icon(icon, size: 15, color: SupervisorTheme.mutedText),
+            Icon(icon, size: 15, color: color ?? SupervisorTheme.mutedText),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12.5,
-                  color: SupervisorTheme.mutedText,
+                  color: color ?? SupervisorTheme.mutedText,
+                  fontWeight:
+                      color == null ? FontWeight.normal : FontWeight.w600,
                 ),
               ),
             ),
@@ -760,9 +846,21 @@ class _SupervisorDetailSheet extends StatelessWidget {
             '${ticket.categoryName ?? '-'}${ticket.subcategoryName != null ? ' › ${ticket.subcategoryName}' : ''}',
           ),
           _kv('Priority', ticket.priorityCode ?? '-'),
-          _kv('Assigned team', ticket.assignedTeamName ?? '-'),
-          if (ticket.assignedStaffName != null)
-            _kv('Responsible', ticket.assignedStaffName!),
+          _kv('Assigned to', ticket.assignedStaffName ?? 'Unassigned'),
+          if (ticket.escalationLevelName != null)
+            _kv('Current level', ticket.escalationLevelName!),
+          if (ticket.isEscalated)
+            _kv(
+              'Escalated to',
+              ticket.escalatedToStaffName ?? 'Next level up',
+            ),
+          if (_escalationDueLabel(ticket) != null)
+            _kv(
+              ticket.isEscalationOverdue
+                  ? 'Escalation overdue'
+                  : 'Escalates in',
+              _escalationDueLabel(ticket)!,
+            ),
           if ((ticket.customerName ?? '').isNotEmpty)
             _kv('Citizen', ticket.customerName!),
           if ((ticket.waPhone ?? '').isNotEmpty)

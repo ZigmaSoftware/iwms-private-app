@@ -32,6 +32,10 @@ class _TrackWasteScreenState extends State<TrackWasteScreen> {
     final theme = Theme.of(context);
     final highlightColor = theme.colorScheme.primary;
     final textColor = theme.colorScheme.onSurface;
+    final isDarkMode = theme.brightness == Brightness.dark;
+    final surfaceColor = theme.colorScheme.surface;
+    final outlineColor = theme.colorScheme.outlineVariant;
+    final secondaryTextColor = theme.colorScheme.onSurfaceVariant;
     final localizations = AppLocalizations.of(context);
 
     return Scaffold(
@@ -47,38 +51,43 @@ class _TrackWasteScreenState extends State<TrackWasteScreen> {
       ),
       body: CitizenPatternBackground(
         child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          return TrackTab(
-            controller: _controller,
-            highlightColor: highlightColor,
-            textColor: textColor,
-            onPickDate: () async {
-              final now = DateTime.now();
-              final selected = await showDatePicker(
-                context: context,
-                initialDate: _controller.selectedDate,
-                firstDate: DateTime(now.year - 1),
-                lastDate: DateTime(now.year + 1),
-                helpText: localizations.trackDatePickerHelp,
-                builder: (context, child) {
-                  return Theme(
-                    data: theme.copyWith(
-                      colorScheme: theme.colorScheme.copyWith(
-                        primary: highlightColor,
+          animation: _controller,
+          builder: (context, _) {
+            return TrackTab(
+              controller: _controller,
+              highlightColor: highlightColor,
+              textColor: textColor,
+              surfaceColor: surfaceColor,
+              outlineColor: outlineColor,
+              isDarkMode: isDarkMode,
+              secondaryTextColor: secondaryTextColor,
+              onRefresh: () => _controller.refresh(force: true),
+              onPickDate: () async {
+                final now = DateTime.now();
+                final selected = await showDatePicker(
+                  context: context,
+                  initialDate: _controller.selectedDate,
+                  firstDate: DateTime(now.year - 1),
+                  lastDate: DateTime(now.year + 1),
+                  helpText: localizations.trackDatePickerHelp,
+                  builder: (context, child) {
+                    return Theme(
+                      data: theme.copyWith(
+                        colorScheme: theme.colorScheme.copyWith(
+                          primary: highlightColor,
+                        ),
                       ),
-                    ),
-                    child: child!,
-                  );
-                },
-              );
+                      child: child!,
+                    );
+                  },
+                );
 
-              if (selected != null) {
-                await _controller.pickDate(selected);
-              }
-            },
-          );
-        },
+                if (selected != null) {
+                  await _controller.pickDate(selected);
+                }
+              },
+            );
+          },
         ),
       ),
     );

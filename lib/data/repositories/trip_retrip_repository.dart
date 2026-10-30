@@ -31,16 +31,35 @@ class TripRetripRepository {
   }) async {
     try {
       final dio = await authorizedDio();
-      final res = await dio.get(
+      var res = await dio.get(
         ApiConfig.retripRequests,
         queryParameters: {
           if (status != null) 'status': status,
           if (mine) 'mine': 'true',
         },
       );
-      return _rawList(res.data)
-          .map(TripRetripRequest.fromJson)
-          .toList();
+      final rows = <Map<String, dynamic>>[];
+      final seenPages = <String>{};
+      while (true) {
+        if (res.data is! List &&
+            (res.data is! Map ||
+                (res.data['results'] is! List && res.data['data'] is! List))) {
+          throw const FormatException('Invalid reports response');
+        }
+        rows.addAll(_rawList(res.data));
+        final next = res.data is Map ? res.data['next'] : null;
+        if (next == null || next == '') break;
+        if (!seenPages.add(next.toString())) {
+          throw const FormatException('Repeated reports page');
+        }
+        final current = Uri.parse(ApiConfig.retripRequests);
+        final url = current.resolve(next.toString());
+        if (url.origin != current.origin) {
+          throw const FormatException('Invalid reports page');
+        }
+        res = await dio.get(url.toString());
+      }
+      return rows.map(TripRetripRequest.fromJson).toList();
     } on DioException catch (e) {
       throw TripRetripException(_message(e));
     } catch (e) {
@@ -48,9 +67,26 @@ class TripRetripRepository {
     }
   }
 
-  /// Approve, carrying over only [collectionPointIds] (bin trips) — omit for
-  /// a household trip, where every remaining household carries automatically
-  /// (sending a list there would be interpreted as a bin-style selection).
+  Future<TripRetripRequest> fetchRequest(String uniqueId) async {
+    try {
+      final dio = await authorizedDio();
+      final res = await dio.get('${ApiConfig.retripRequests}$uniqueId/');
+      if (res.data is! Map) {
+        throw const FormatException('Invalid Re-Trip request response');
+      }
+      return TripRetripRequest.fromJson(
+        Map<String, dynamic>.from(res.data as Map),
+      );
+    } on DioException catch (e) {
+      throw TripRetripException(_message(e));
+    } catch (e) {
+      throw TripRetripException(e.toString());
+    }
+  }
+
+  /// Approve, carrying over only [collectionPointIds]. The list contains the
+  /// selected pending stop ids; the supervisor starts with every stop selected
+  /// and unticks anything to drop for today.
   /// Returns the new continuation trip's assignment id, if the backend sent
   /// one back.
   Future<String?> approve(

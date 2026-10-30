@@ -6,6 +6,7 @@ import '../controllers/track_controller.dart';
 import '../models/waste_period.dart';
 import '../models/waste_summary.dart';
 import '../widgets/waste_stat_card.dart';
+import '../../home/widgets/today_pickup_card.dart';
 
 enum WasteMetric { total, wet, dry, mixed }
 
@@ -16,12 +17,24 @@ class TrackTab extends StatefulWidget {
     required this.highlightColor,
     required this.textColor,
     required this.onPickDate,
+    required this.surfaceColor,
+    required this.outlineColor,
+    required this.isDarkMode,
+    required this.secondaryTextColor,
+    required this.onRefresh,
+    this.pickupRefresh,
   });
 
   final TrackController controller;
   final Color highlightColor;
   final Color textColor;
   final Future<void> Function() onPickDate;
+  final Color surfaceColor;
+  final Color outlineColor;
+  final bool isDarkMode;
+  final Color secondaryTextColor;
+  final Future<void> Function() onRefresh;
+  final Listenable? pickupRefresh;
 
   @override
   State<TrackTab> createState() => _TrackTabState();
@@ -40,12 +53,12 @@ class _TrackTabState extends State<TrackTab> {
       animation: widget.controller,
       builder: (context, _) {
         final controller = widget.controller;
-        final summary =
-            controller.currentSummary ?? WasteSummary.zero(controller.selectedDate);
+        final summary = controller.currentSummary ??
+            WasteSummary.zero(controller.selectedDate);
         final periodLabel = _periodDescription(controller);
 
         return RefreshIndicator(
-          onRefresh: () => controller.refresh(force: true),
+          onRefresh: widget.onRefresh,
           color: widget.highlightColor,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -57,6 +70,15 @@ class _TrackTabState extends State<TrackTab> {
             children: [
               _buildTrackHeader(theme, localizations),
               const SizedBox(height: 16),
+              TodayPickupCard(
+                surfaceColor: widget.surfaceColor,
+                outlineColor: widget.outlineColor,
+                isDarkMode: widget.isDarkMode,
+                textColor: widget.textColor,
+                secondaryTextColor: widget.secondaryTextColor,
+                refreshSignal: widget.pickupRefresh,
+                horizontalPadding: 0,
+              ),
               _buildTrackSummarySection(
                 theme,
                 summary,
@@ -116,7 +138,8 @@ class _TrackTabState extends State<TrackTab> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.2),
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -230,16 +253,16 @@ class _TrackTabState extends State<TrackTab> {
         if (!hasData)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-        child: _buildTrackStatusCard(
-          message: localizations.trackNoData,
-          accentColor: widget.highlightColor,
-        ),
+            child: _buildTrackStatusCard(
+              message: localizations.trackNoData,
+              accentColor: widget.highlightColor,
+            ),
           ),
         LayoutBuilder(
           builder: (context, constraints) {
             final available = constraints.maxWidth;
             final itemWidth = available > 0 ? (available - 24) / 3 : available;
-        return Wrap(
+            return Wrap(
               spacing: 12,
               runSpacing: 12,
               children: cards
@@ -277,7 +300,8 @@ class _TrackTabState extends State<TrackTab> {
     final metric = _activeMetric;
     final double weight = _metricWeight(summary, metric);
     final Color accent = _metricAccent(metric);
-    final String weightLabel = '${widget.controller.weightFormatter.format(weight)} kg';
+    final String weightLabel =
+        '${widget.controller.weightFormatter.format(weight)} kg';
 
     return AnimatedContainer(
       duration: DashboardThemeTokens.animationSlow,
@@ -525,16 +549,14 @@ class _CalendarChip extends StatelessWidget {
                   Text(
                     localizations.calendarLabel,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color:
-                          enabled ? highlightColor : theme.disabledColor,
+                      color: enabled ? highlightColor : theme.disabledColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
                     label,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color:
-                          enabled ? highlightColor : theme.disabledColor,
+                      color: enabled ? highlightColor : theme.disabledColor,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

@@ -22,7 +22,8 @@ class SupervisorAddTeamForm extends StatefulWidget {
 
   final SupervisorTeam? existingTeam;
 
-  static Future<bool?> show(BuildContext context, {SupervisorTeam? existingTeam}) {
+  static Future<bool?> show(BuildContext context,
+      {SupervisorTeam? existingTeam}) {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -77,10 +78,51 @@ class _SupervisorAddTeamFormState extends State<SupervisorAddTeamForm> {
         _repo.fetchAvailableOperators(excludeTemplateId: excludeId),
       ]);
       final user = await getIt<AuthRepository>().getAuthenticatedUser();
+      final team = widget.existingTeam;
+      final drivers = _withExistingOption(
+        results[0],
+        team == null
+            ? null
+            : SupervisorCrewOption(
+                uniqueId: team.driverId,
+                name: team.driverName.isNotEmpty
+                    ? team.driverName
+                    : team.driverId,
+              ),
+      );
+      var operators = _withExistingOption(
+        results[1],
+        team == null
+            ? null
+            : SupervisorCrewOption(
+                uniqueId: team.operatorId,
+                name: team.operatorName.isNotEmpty
+                    ? team.operatorName
+                    : team.operatorId,
+              ),
+      );
+      if (team != null) {
+        for (final id in team.extraOperatorIds) {
+          operators = _withExistingOption(
+            operators,
+            SupervisorCrewOption(uniqueId: id, name: id),
+          );
+        }
+      }
+      final extras = team == null
+          ? const <SupervisorCrewOption>[]
+          : [
+              for (final id in team.extraOperatorIds)
+                _optionForId(operators, id) ??
+                    SupervisorCrewOption(uniqueId: id, name: id),
+            ];
       if (!mounted) return;
       setState(() {
-        _drivers = results[0];
-        _operators = results[1];
+        _drivers = drivers;
+        _operators = operators;
+        _driverId = _validId(_driverId, drivers);
+        _operatorId = _validId(_operatorId, operators);
+        _extraOperators = extras;
         _geoScope = user?.geoScope;
         _loadingOptions = false;
       });
@@ -103,6 +145,32 @@ class _SupervisorAddTeamFormState extends State<SupervisorAddTeamForm> {
       initiallySelected: _extraOperators,
     );
     if (result != null) setState(() => _extraOperators = result);
+  }
+
+  List<SupervisorCrewOption> _withExistingOption(
+    List<SupervisorCrewOption> options,
+    SupervisorCrewOption? existing,
+  ) {
+    if (existing == null || existing.uniqueId.isEmpty) return options;
+    if (options.any((option) => option.uniqueId == existing.uniqueId)) {
+      return options;
+    }
+    return [existing, ...options];
+  }
+
+  SupervisorCrewOption? _optionForId(
+    List<SupervisorCrewOption> options,
+    String id,
+  ) {
+    for (final option in options) {
+      if (option.uniqueId == id) return option;
+    }
+    return null;
+  }
+
+  String? _validId(String? id, List<SupervisorCrewOption> options) {
+    if (id == null || id.isEmpty) return null;
+    return options.any((option) => option.uniqueId == id) ? id : null;
   }
 
   bool get _canSave => _driverId != null && _operatorId != null && !_saving;
@@ -238,7 +306,7 @@ class _SupervisorAddTeamFormState extends State<SupervisorAddTeamForm> {
               ),
             ),
           DropdownButtonFormField<String>(
-            value: _driverId,
+            value: _dropdownValue(_driverId, _drivers),
             isExpanded: true,
             style: SupervisorTheme.inputTextStyle,
             dropdownColor: SupervisorTheme.surface,
@@ -253,7 +321,7 @@ class _SupervisorAddTeamFormState extends State<SupervisorAddTeamForm> {
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
-            value: _operatorId,
+            value: _dropdownValue(_operatorId, _operators),
             isExpanded: true,
             style: SupervisorTheme.inputTextStyle,
             dropdownColor: SupervisorTheme.surface,
@@ -326,5 +394,10 @@ class _SupervisorAddTeamFormState extends State<SupervisorAddTeamForm> {
         ],
       ),
     );
+  }
+
+  String? _dropdownValue(String? id, List<SupervisorCrewOption> options) {
+    if (id == null || id.isEmpty) return null;
+    return options.any((option) => option.uniqueId == id) ? id : null;
   }
 }

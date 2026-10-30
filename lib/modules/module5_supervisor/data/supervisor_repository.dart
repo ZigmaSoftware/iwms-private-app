@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'supervisor_trip_workbench.dart';
 
 import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
@@ -21,14 +22,88 @@ class SupervisorException implements Exception {
 /// existing backend endpoints (zone map + daily trip assignments). Read-only
 /// for this phase — assignment approval is intentionally not wired yet.
 class SupervisorRepository {
+  SupervisorRepository({Future<Dio> Function()? dioProvider})
+      : _dioProvider = dioProvider ?? authorizedDio;
+  final Future<Dio> Function() _dioProvider;
+
+  Future<List<SupervisorPlanOption>> fetchTodayPlanOptions() async {
+    try {
+      final dio = await _dioProvider();
+      final response = await dio.get(ApiConfig.supervisorTodayPlanOptions);
+      final rows = response.data is Map ? response.data['results'] : null;
+      return (rows is List ? rows : const [])
+          .whereType<Map>()
+          .map((row) =>
+              SupervisorPlanOption.fromJson(Map<String, dynamic>.from(row)))
+          .toList(growable: false);
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    }
+  }
+
+  Future<void> assignSelectedPlans(List<String> tripPlanIds) async {
+    try {
+      final dio = await _dioProvider();
+      final response = await dio.post(ApiConfig.supervisorGenerateSelected,
+          data: {'trip_plan_ids': tripPlanIds});
+      // The server answers 200 even when it skipped every plan, listing why
+      // under `blocked` — surface that instead of claiming success.
+      final data = response.data is Map ? response.data as Map : const {};
+      final assigned = [
+        ...(data['created'] as List? ?? const []),
+        ...(data['existing'] as List? ?? const []),
+      ];
+      final blocked = (data['blocked'] as List? ?? const [])
+          .whereType<Map>()
+          .map((b) => b['reason']?.toString() ?? '')
+          .where((r) => r.isNotEmpty)
+          .toSet();
+      if (assigned.isEmpty) {
+        throw SupervisorException(blocked.isEmpty
+            ? 'The trip could not be assigned. Please refresh and try again.'
+            : blocked.join('. '));
+      }
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    }
+  }
+
+  Future<void> declareNoCollection({
+    required List<String> tripPlanIds,
+    required String reasonCode,
+    String reasonText = '',
+  }) async {
+    try {
+      final dio = await _dioProvider();
+      await dio.post(ApiConfig.supervisorNoCollection, data: {
+        'trip_plan_ids': tripPlanIds,
+        'reason_code': reasonCode,
+        'reason_text': reasonText.trim(),
+      });
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    }
+  }
+
+  Future<void> revokeNoCollection(String noticeId, {String reason = ''}) async {
+    try {
+      final dio = await _dioProvider();
+      await dio.post(ApiConfig.supervisorRevokeNoCollection,
+          data: {'notice_id': noticeId, 'reason': reason.trim()});
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    }
+  }
+
   static const String _assignments =
       '${ApiConfig.desktopBase}schedule-operations/daily-trip-assignments/';
+  // "staff-creations" — a dev merge renamed the backend's router group (and
+  // the underlying model package) from "user-creations"; this was left
+  // pointing at the old URL and 404'd on every call.
   static const String _staff =
-      '${ApiConfig.desktopBase}user-creations/staffcreation/';
+      '${ApiConfig.desktopBase}staff-creations/staffcreation/';
   static const String _staffTemplates =
       '${ApiConfig.desktopBase}schedule-setup/staff-templates/';
-  static const String _tripLogs =
-      '${ApiConfig.desktopBase}schedule-operations/daily-trip-logs/';
   static const String _binCollectionEvents =
       '${ApiConfig.desktopBase}schedule-operations/bin-collection-events/';
   static const String _householdWasteCollections =
@@ -44,7 +119,7 @@ class SupervisorRepository {
   /// Fetch the requesting supervisor's authorised zone scope.
   ///
   /// The government backend has no zone-map concept (it's hierarchy/ward
-  /// based, not zone-based) — `user-creations/supervisor-zone-map/me/` was
+  /// based, not zone-based) — `staff-creations/supervisor-zone-map/me/` was
   /// removed there well before ward support was added, so this always
   /// resolves to an empty scope without a network round trip. Assignment
   /// loading proceeds via `mine=true` regardless (see [fetchAssignments]).
@@ -61,7 +136,7 @@ class SupervisorRepository {
     String? status,
     bool mine = false,
   }) async {
-    final dio = await authorizedDio();
+    final dio = await _dioProvider();
     final dateStr = date == null ? null : _formatDate(date);
 
     Future<List<SupervisorAssignment>> fetchFor(String? zoneId) async {
@@ -102,30 +177,141 @@ class SupervisorRepository {
     }
   }
 
-  /// This supervisor's trip history, sourced from the daily trip log
-  /// (actuals recorded during/after each trip), newest first. Adapted into
-  /// the same [SupervisorAssignment] shape as `fetchAssignments` so the UI
-  /// (`SupervisorAssignmentCard`) matches exactly.
-  Future<List<SupervisorAssignment>> fetchAssignmentHistory() async {
+  Future<void> reviewTripAssignment(String id,
+      {required bool approve, String reason = ''}) async {
     try {
-      final dio = await authorizedDio();
-      final res = await dio.get(_tripLogs, queryParameters: {'mine': 'true'});
-      final list = _rawList(res.data)
-          .map((e) => SupervisorAssignment.fromTripLogJson(e))
-          .toList();
-      list.sort((a, b) {
-        final ad = a.tripDate, bd = b.tripDate;
-        if (ad == null && bd == null) return 0;
-        if (ad == null) return 1;
-        if (bd == null) return -1;
-        return bd.compareTo(ad);
+      final dio = await _dioProvider();
+      await dio.patch('$_assignments$id/approval/', data: {
+        'approval_status': approve ? 'Approved' : 'Rejected',
+        'reason': reason,
       });
-      return list;
     } on DioException catch (e) {
       throw SupervisorException(_message(e));
-    } catch (e) {
-      throw SupervisorException(e.toString());
     }
+  }
+
+  /// Moves a not-started trip to another vehicle, keeping its crew — the
+  /// fix for a trip blocked by a vehicle breakdown.
+  Future<void> changeTripVehicle(String id, String vehicleId) async {
+    try {
+      final dio = await _dioProvider();
+      await dio.patch('$_assignments$id/change-vehicle/', data: {
+        'vehicle_id': vehicleId,
+      });
+    } on DioException catch (e) {
+      // Refusals (busy at that time, under breakdown) come as a field error.
+      final data = e.response?.data;
+      if (data is Map && data['vehicle_id'] != null) {
+        final reason = data['vehicle_id'];
+        throw SupervisorException(
+            reason is List ? reason.join('\n') : reason.toString());
+      }
+      throw SupervisorException(_message(e));
+    }
+  }
+
+  Future<void> cancelScheduledTrip(String id, String reason) async {
+    try {
+      final dio = await _dioProvider();
+      await dio.patch('$_assignments$id/status/', data: {
+        'status': 'Cancelled',
+        'expected_status': 'Scheduled',
+        'reason': reason,
+      });
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    }
+  }
+
+  /// Fetch all workbench pages before publishing counts. Do not silently treat
+  /// an old backend or a malformed response as an empty work day.
+  Future<SupervisorTripWorkbench> fetchTripWorkbench() async {
+    try {
+      final dio = await _dioProvider();
+      final items = <String, SupervisorAssignment>{};
+      DateTime? serviceDate;
+      DateTime? serverNow;
+      var offset = 0;
+      while (true) {
+        final res = await dio.get(_assignments, queryParameters: {
+          'mine': 'true',
+          'trip_view': 'workbench',
+          'limit': 100,
+          'offset': offset,
+          'ordering': 'trip_date,scheduled_time,unique_id',
+        });
+        final data = _tripPageData(res.data);
+        final day = DateTime.parse(data['service_date'] as String);
+        if (serviceDate != null && day != serviceDate) {
+          throw SupervisorException('The service date changed. Refresh trips.');
+        }
+        serviceDate = day;
+        serverNow ??= parseServiceWallTime(data['as_of'] as String);
+        final page = _parseList(data);
+        for (final item in page) {
+          items[item.uniqueId] = item;
+        }
+        if (data['next'] == null) break;
+        if (page.isEmpty) {
+          throw SupervisorException('Could not load all trips. Please retry.');
+        }
+        offset += page.length;
+      }
+      return SupervisorTripWorkbench(
+          serviceDate: serviceDate,
+          serverNow: serverNow,
+          assignments: items.values.toList());
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e),
+          code: e.response?.statusCode == 403 ? 'FORBIDDEN' : null);
+    }
+  }
+
+  Future<SupervisorTripHistoryPage> fetchTripHistoryPage({
+    DateTime? from,
+    DateTime? to,
+    String? status,
+    String search = '',
+    bool retripOnly = false,
+    bool exceptionsOnly = false,
+    int offset = 0,
+  }) async {
+    try {
+      final dio = await _dioProvider();
+      final res = await dio.get(_assignments, queryParameters: {
+        'mine': 'true',
+        'trip_view': 'history',
+        'limit': 30,
+        'offset': offset,
+        if (from != null) 'from_date': _formatDate(from),
+        if (to != null) 'to_date': _formatDate(to),
+        if (status != null) 'status': status,
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+        if (retripOnly) 'retrip_only': 'true',
+        if (exceptionsOnly) 'exceptions_only': 'true',
+      });
+      final data = _tripPageData(res.data);
+      return SupervisorTripHistoryPage(
+          items: _parseList(data),
+          count: (data['count'] as num).toInt(),
+          hasMore: data['next'] != null,
+          serviceDate: DateTime.parse(data['service_date'] as String));
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e),
+          code: e.response?.statusCode == 403 ? 'FORBIDDEN' : null);
+    }
+  }
+
+  Map<String, dynamic> _tripPageData(dynamic data) {
+    if (data is! Map ||
+        data['results'] is! List ||
+        data['count'] is! num ||
+        data['service_date'] is! String ||
+        data['as_of'] is! String) {
+      throw SupervisorException(
+          'Trip information is unavailable. Please refresh or contact your administrator.');
+    }
+    return Map<String, dynamic>.from(data);
   }
 
   /// The supervisor's collected-waste time series (one entry per bin
@@ -165,9 +351,16 @@ class SupervisorRepository {
   /// record rather than one type per row, so it's fanned out into up to 4
   /// synthetic events (see `SupervisorWasteEvent.fromHouseholdCollectionJson`)
   /// to match the per-type shape the summary cards expect.
-  Future<List<SupervisorWasteEvent>> fetchWasteEvents() async {
+  Future<List<SupervisorWasteEvent>> fetchWasteEvents({
+    DateTime? from,
+    DateTime? to,
+  }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
+      final dateQuery = <String, dynamic>{
+        if (from != null) 'date_from': _formatDate(from),
+        if (to != null) 'date_to': _formatDate(to),
+      };
       final results = await Future.wait([
         dio.get(
           _binCollectionEvents,
@@ -175,11 +368,12 @@ class SupervisorRepository {
             'mine': 'true',
             'status': 'Collected',
             'limit': '5000',
+            ...dateQuery,
           },
         ),
         dio.get(
           _householdWasteCollections,
-          queryParameters: {'mine': 'true', 'limit': '5000'},
+          queryParameters: {'mine': 'true', 'limit': '5000', ...dateQuery},
         ),
       ]);
 
@@ -202,11 +396,8 @@ class SupervisorRepository {
   /// which groups by designation.
   Future<List<SupervisorStaff>> fetchStaff() async {
     try {
-      final dio = await authorizedDio();
-      final res = await dio.get(_staff);
-      return _rawList(res.data)
-          .map((e) => SupervisorStaff.fromJson(e))
-          .toList();
+      final raw = await _fetchAllRaw(_staff);
+      return raw.map((e) => SupervisorStaff.fromJson(e)).toList();
     } on DioException catch (e) {
       throw SupervisorException(_message(e));
     } catch (e) {
@@ -218,7 +409,7 @@ class SupervisorRepository {
     DateTime? date,
   }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       final target = date ?? DateTime.now();
       final dateStr = _formatDate(target);
       final res = await dio.get(
@@ -236,18 +427,27 @@ class SupervisorRepository {
       }
       return SupervisorStaffAttendanceSummary.empty;
     } on DioException catch (e) {
-      throw SupervisorException(_message(e));
+      try {
+        final staff = await fetchStaff();
+        return SupervisorStaffAttendanceSummary.fromStaffList(staff);
+      } catch (_) {
+        throw SupervisorException(_message(e));
+      }
     } catch (e) {
-      throw SupervisorException(e.toString());
+      try {
+        final staff = await fetchStaff();
+        return SupervisorStaffAttendanceSummary.fromStaffList(staff);
+      } catch (_) {
+        throw SupervisorException(e.toString());
+      }
     }
   }
 
   /// Staff templates (the "Teams" list).
   Future<List<SupervisorTeam>> fetchTeams() async {
     try {
-      final dio = await authorizedDio();
-      final res = await dio.get(_staffTemplates);
-      return _rawList(res.data).map((e) => SupervisorTeam.fromJson(e)).toList();
+      final raw = await _fetchAllRaw(_staffTemplates);
+      return raw.map((e) => SupervisorTeam.fromJson(e)).toList();
     } on DioException catch (e) {
       throw SupervisorException(_message(e));
     } catch (e) {
@@ -257,11 +457,8 @@ class SupervisorRepository {
 
   Future<List<SupervisorVehicle>> fetchVehicles() async {
     try {
-      final dio = await authorizedDio();
-      final res = await dio.get(ApiConfig.vehicles);
-      return _rawList(res.data)
-          .map((e) => SupervisorVehicle.fromJson(e))
-          .toList();
+      final raw = await _fetchAllRaw(ApiConfig.vehicles);
+      return raw.map((e) => SupervisorVehicle.fromJson(e)).toList();
     } on DioException catch (e) {
       throw SupervisorException(_message(e));
     } catch (e) {
@@ -271,11 +468,8 @@ class SupervisorRepository {
 
   Future<List<SupervisorCollectionPoint>> fetchCollectionPoints() async {
     try {
-      final dio = await authorizedDio();
-      final res = await dio.get(_collectionPoints);
-      return _rawList(res.data)
-          .map((e) => SupervisorCollectionPoint.fromJson(e))
-          .toList();
+      final raw = await _fetchAllRaw(_collectionPoints);
+      return raw.map((e) => SupervisorCollectionPoint.fromJson(e)).toList();
     } on DioException catch (e) {
       throw SupervisorException(_message(e));
     } catch (e) {
@@ -285,11 +479,8 @@ class SupervisorRepository {
 
   Future<List<SupervisorHousehold>> fetchHouseholds() async {
     try {
-      final dio = await authorizedDio();
-      final res = await dio.get(_households);
-      return _rawList(res.data)
-          .map((e) => SupervisorHousehold.fromJson(e))
-          .toList();
+      final raw = await _fetchAllRaw(_households);
+      return raw.map((e) => SupervisorHousehold.fromJson(e)).toList();
     } on DioException catch (e) {
       throw SupervisorException(_message(e));
     } catch (e) {
@@ -314,7 +505,7 @@ class SupervisorRepository {
     List<String> extraOperatorIds = const [],
   }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       await dio.patch('$_staffTemplates$uniqueId/', data: {
         'driver_id': driverId,
         'operator_id': operatorId,
@@ -348,7 +539,7 @@ class SupervisorRepository {
     String? excludeTemplateId,
   }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       final res = await dio.get(
         ApiConfig.staffTemplateAvailableStaff,
         queryParameters: {
@@ -378,10 +569,9 @@ class SupervisorRepository {
     String roleKeyword,
   ) async {
     try {
-      final dio = await authorizedDio();
-      final res = await dio.get(_staff);
+      final raw = await _fetchAllRaw(_staff);
       final options = <SupervisorCrewOption>[];
-      for (final j in _rawList(res.data)) {
+      for (final j in raw) {
         final role = [
           j['governmentusertype_name'],
           j['staffusertype_name'],
@@ -403,7 +593,7 @@ class SupervisorRepository {
   Future<List<SupervisorAltStaffTemplate>>
       fetchAlternativeStaffTemplates() async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       final res = await dio.get(_alternativeStaffTemplates);
       return _rawList(res.data)
           .map((e) => SupervisorAltStaffTemplate.fromJson(e))
@@ -429,7 +619,7 @@ class SupervisorRepository {
     String? changeRemarks,
   }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       await dio.post(_alternativeStaffTemplates, data: {
         'staff_template': staffTemplateId,
         'driver': driverId,
@@ -456,7 +646,7 @@ class SupervisorRepository {
     required String altStaffTemplateId,
   }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       await dio.patch(
         '$_assignments$assignmentId/',
         data: {'alt_staff_template_id': altStaffTemplateId},
@@ -477,7 +667,7 @@ class SupervisorRepository {
     required SupervisorTeam team,
   }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       final today = _formatDate(DateTime.now());
       final created = await dio.post(_alternativeStaffTemplates, data: {
         'staff_template': team.uniqueId,
@@ -519,7 +709,7 @@ class SupervisorRepository {
     required GeoScope? geo,
   }) async {
     try {
-      final dio = await authorizedDio();
+      final dio = await _dioProvider();
       await dio.post(_staffTemplates, data: {
         'driver_id': driverId,
         'operator_id': operatorId,
@@ -540,6 +730,47 @@ class SupervisorRepository {
     } catch (e) {
       throw SupervisorException(e.toString());
     }
+  }
+
+  /// Fetches every page of a paginated master-list endpoint (staff, teams,
+  /// vehicles, collection points, households/customers), following the
+  /// backend's `next` link until exhausted.
+  ///
+  /// The backend paginates every list at 20 rows by default
+  /// (`LimitOffsetWithPage`, `PAGE_SIZE = 20`). A single unpaginated GET only
+  /// ever sees page one, so a company with more than 20 of something — the
+  /// 130+ customers under this account being the case that surfaced it —
+  /// silently lost everything past the 20th. `?limit=200` cuts the common
+  /// case to one request; `next` covers however many more pages remain
+  /// (there is no server-side cap on `limit`, so this never needs raising).
+  Future<List<Map<String, dynamic>>> _fetchAllRaw(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final dio = await _dioProvider();
+    final combined = <Map<String, dynamic>>[];
+
+    var res = await dio.get(
+      path,
+      queryParameters: {'limit': 200, ...?queryParameters},
+    );
+    combined.addAll(_rawList(res.data));
+
+    var next = _nextPageUrl(res.data);
+    while (next != null) {
+      res = await dio.get(next);
+      combined.addAll(_rawList(res.data));
+      next = _nextPageUrl(res.data);
+    }
+    return combined;
+  }
+
+  String? _nextPageUrl(dynamic data) {
+    if (data is Map && data['next'] is String) {
+      final next = data['next'] as String;
+      return next.isEmpty ? null : next;
+    }
+    return null;
   }
 
   List<Map<String, dynamic>> _rawList(dynamic data) {

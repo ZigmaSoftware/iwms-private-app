@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:iwms_private_app/core/di.dart';
+import 'package:iwms_private_app/core/network/permission_error.dart';
+import 'package:iwms_private_app/core/network/trip_stale_signal.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
 
 Dio _cloneBaseDio() {
@@ -24,6 +27,27 @@ Dio _cloneBaseDio() {
 
   final dio = Dio(options);
   dio.interceptors.addAll(base.interceptors);
+  // Name the missing permission in the log instead of leaving a bare 403.
+  // A denied request and a broken endpoint used to look identical here.
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onError: (error, handler) {
+        final denied = asPermissionDenied(error);
+        if (denied != null) {
+          debugPrint(
+            'Permission denied: ${error.requestOptions.method} '
+            '${error.requestOptions.path} -> '
+            'module=${denied.module} resource=${denied.resource} '
+            'action=${denied.action}',
+          );
+        }
+        // A write against a closed trip / carried-over stop: tell the trip
+        // screens to reload (see TripStaleSignal).
+        TripStaleSignal.notifyIfStale(error.response?.data);
+        handler.next(error);
+      },
+    ),
+  );
   dio.httpClientAdapter = base.httpClientAdapter;
   return dio;
 }

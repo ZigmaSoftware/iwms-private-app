@@ -272,8 +272,9 @@ class _SupervisorHeaderState extends State<SupervisorHeader> {
   }
 
   Widget _zoneStrip() {
-    final label = widget.zoneLabel.trim().isNotEmpty
-        ? widget.zoneLabel
+    final scope = widget.zoneLabel.trim();
+    final label = scope.isNotEmpty
+        ? 'Ward : $scope'
         : (widget.zoneCount > 0
             ? '${widget.zoneCount} zone${widget.zoneCount == 1 ? '' : 's'} assigned'
             : 'No zones assigned');

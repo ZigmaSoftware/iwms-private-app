@@ -29,6 +29,7 @@ import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_waste_summary_cards.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_today_operations.dart';
 import 'package:iwms_private_app/shared/widgets/staff_notifications_screen.dart';
 
 /// Dashboard tab — header + zone KPIs + activity/alerts feed.
@@ -85,8 +86,8 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
 
   Future<void> _loadPendingBreakdownCount() async {
     try {
-      final reports =
-          await _breakdownRepo.fetchBreakdowns(approvalStatus: 'PENDING');
+      final reports = await _breakdownRepo.fetchBreakdowns(
+          approvalStatus: 'PENDING', mine: true);
       if (!mounted) return;
       setState(() => _pendingBreakdownCount = reports.length);
     } catch (_) {}
@@ -119,8 +120,17 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
     try {
       final tickets = await _grievanceRepo.fetchTickets();
       if (!mounted) return;
-      setState(() => _grievanceCount = tickets.length);
+      setState(() => _grievanceCount =
+          tickets.where((ticket) => !_isFinalGrievance(ticket)).length);
     } catch (_) {}
+  }
+
+  bool _isFinalGrievance(dynamic ticket) {
+    final status = ticket.statusCode?.toString().toUpperCase() ?? '';
+    return status == 'RESOLVED' ||
+        status == 'CLOSED' ||
+        status == 'REJECTED' ||
+        status == 'CANCELLED';
   }
 
   Future<void> _loadHierarchyCounts() async {
@@ -203,6 +213,13 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SupervisorTodayOperations(
+                updatedAt: state.updatedAt,
+                assignments: state.assignments,
+                onChanged: () => context.read<SupervisorBloc>().refresh(),
+                onOpenTrips: widget.onOpenTrips,
+              ),
+              const SizedBox(height: 18),
               const SupervisorWasteSummaryCards(),
               const SizedBox(height: 18),
               const Text(
@@ -278,7 +295,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
         .where((templateId) => templateId.isNotEmpty)
         .toSet()
         .length;
-    final tripCount = assignments.length;
+    final tripCount = context.read<SupervisorBloc>().state.activeTrips.length;
 
     final tiles = <_QuickActionSpec>[
       _QuickActionSpec(
@@ -348,7 +365,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
         tile: SupervisorGlassActionTile(
           iconAsset: 'assets/icons/garbage-truck.png',
           label: 'Trips',
-          badgeLabel: '$tripCount',
+          badgeLabel: tripCount > 0 ? '$tripCount' : null,
           onTap: widget.onOpenTrips,
         ),
       ),
@@ -397,12 +414,15 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
         tile: SupervisorGlassActionTile(
           iconAsset: 'assets/icons/grievance.png',
           label: 'Grievances',
-          badgeLabel: '$_grievanceCount',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const SupervisorGrievanceScreen(),
-            ),
-          ),
+          badgeLabel: _grievanceCount > 0 ? '$_grievanceCount' : null,
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SupervisorGrievanceScreen(),
+              ),
+            );
+            _loadGrievanceCount();
+          },
         ),
       ),
       _QuickActionSpec(
@@ -421,7 +441,7 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
         filter: _QuickActionFilter.actions,
         tile: SupervisorGlassActionTile(
           iconAsset: 'assets/icons/history (1).png',
-          label: 'History',
+          label: 'Trip history',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SupervisorHistoryScreen()),
           ),
@@ -493,7 +513,6 @@ class _SupervisorHomePageState extends State<SupervisorHomePage> {
       },
     );
   }
-
 }
 
 class _QuickActionSpec {

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_private_app/core/ui/app_flash.dart';
+import 'package:iwms_private_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/logic/locale/locale_cubit.dart';
 import 'package:iwms_private_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
 
 import '../../../logic/auth/auth_bloc.dart';
@@ -11,7 +13,6 @@ import '../../../logic/auth/auth_event.dart';
 import '../../../logic/theme/theme_cubit.dart';
 import '../../../router/app_router.dart';
 
-const String _languagePreferenceKey = 'profile_language_code';
 const String _fontScalePreferenceKey = 'profile_font_scale';
 
 class ProfileScreen extends StatefulWidget {
@@ -30,7 +31,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const List<_LanguageOption> _supportedLanguages = [
     _LanguageOption(code: 'en', label: 'English (EN)'),
     _LanguageOption(code: 'hi', label: 'Hindi (HI)'),
-    _LanguageOption(code: 'ml', label: 'Malayalam (ML)'),
     _LanguageOption(code: 'ta', label: 'Tamil (TA)'),
   ];
 
@@ -53,10 +53,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _prefs = prefs;
+      final code = context.read<LocaleCubit>().state.languageCode;
       _selectedLanguageCode =
-          prefs.getString(_languagePreferenceKey) ?? _selectedLanguageCode;
+          _supportedLanguages.any((language) => language.code == code)
+              ? code
+              : _supportedLanguages.first.code;
       _fontScale = prefs.getDouble(_fontScalePreferenceKey) ?? 1.0;
     });
   }
@@ -71,12 +75,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _onLanguageChanged(String code) async {
+    await context.read<LocaleCubit>().setLocale(Locale(code));
+    if (!mounted) return;
     setState(() => _selectedLanguageCode = code);
-    await (_prefs ?? await SharedPreferences.getInstance())
-        .setString(_languagePreferenceKey, code);
     final label =
         _supportedLanguages.firstWhere((lang) => lang.code == code).label;
-    _showSavedSnack('Language preference set to $label');
+    _showSavedSnack(AppLocalizations.of(context).languageSaved(label));
   }
 
   Future<void> _onFontScaleChanged(double scale) async {
@@ -99,172 +103,168 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: backgroundColor,
       body: CitizenPatternBackground(
         child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    highlightColor,
-                    highlightColor.withValues(alpha: 0.7),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      highlightColor,
+                      highlightColor.withValues(alpha: 0.7),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            final router = GoRouter.of(context);
+                            if (router.canPop()) {
+                              router.pop();
+                            } else {
+                              router.go(AppRoutePaths.citizenHome);
+                            }
+                          },
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                        ),
+                        Text(
+                          'Profile',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 48),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: colorScheme.onPrimary,
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Image.asset(
+                            'assets/icons/profile.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Hi, ${widget.userName}',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Manage your account and collection preferences',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          final router = GoRouter.of(context);
-                          if (router.canPop()) {
-                            router.pop();
-                          } else {
-                            router.go(AppRoutePaths.citizenHome);
-                          }
-                        },
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      ),
-                      Text(
-                        'Profile',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: colorScheme.onPrimary,
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        child: Image.asset(
-                          'assets/icons/profile.png',
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hi, ${widget.userName}',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Manage your account and collection preferences',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.85),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                  children: [
+                    _ProfileOptionTile(
+                      icon: Icons.description_outlined,
+                      label: 'Collection Details',
+                      textColor: textColor,
+                      highlightColor: highlightColor,
+                      onTap: () => context.push(AppRoutePaths.citizenHistory),
+                    ),
+                    _ProfileOptionTile(
+                      icon: Icons.history,
+                      label: 'Collection History & Weighment',
+                      textColor: textColor,
+                      highlightColor: highlightColor,
+                      onTap: () => context.push(AppRoutePaths.citizenHistory),
+                    ),
+                    _ProfileOptionTile(
+                      icon: Icons.star_rate_outlined,
+                      label: 'Rate Last Collection',
+                      textColor: textColor,
+                      highlightColor: highlightColor,
+                      onTap: () => _showComingSoon(context, 'Rating feature'),
+                    ),
+                    _ProfileOptionTile(
+                      icon: Icons.payments_outlined,
+                      label: 'View Charges & Fines',
+                      textColor: textColor,
+                      highlightColor: highlightColor,
+                      onTap: () =>
+                          _showComingSoon(context, 'Charges & fines section'),
+                    ),
+                    _ProfileThemeToggle(
+                      textColor: textColor,
+                      secondaryText: secondaryText,
+                      highlightColor: highlightColor,
+                    ),
+                    _LanguageSettingsCard(
+                      textColor: textColor,
+                      secondaryText: secondaryText,
+                      highlightColor: highlightColor,
+                      options: _supportedLanguages,
+                      selectedCode: _selectedLanguageCode,
+                      onChanged: _onLanguageChanged,
+                    ),
+                    _FontSizeSettingsCard(
+                      textColor: textColor,
+                      secondaryText: secondaryText,
+                      highlightColor: highlightColor,
+                      options: _fontSizePresets,
+                      selectedScale: _fontScale,
+                      onChanged: _onFontScaleChanged,
+                    ),
+                    _ProfileOptionTile(
+                      icon: Icons.feedback_outlined,
+                      label: 'Raise Grievance (Help Desk)',
+                      textColor: textColor,
+                      highlightColor: highlightColor,
+                      onTap: () =>
+                          context.push(AppRoutePaths.citizenGrievanceChat),
+                    ),
+                    const SizedBox(height: 12),
+                    _LogoutTile(
+                      textColor: textColor,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-                children: [
-                  _ProfileOptionTile(
-                    icon: Icons.description_outlined,
-                    label: 'Collection Details',
-                    textColor: textColor,
-                    highlightColor: highlightColor,
-                    onTap: () => context.push(AppRoutePaths.citizenHistory),
-                  ),
-                  _ProfileOptionTile(
-                    icon: Icons.history,
-                    label: 'Collection History & Weighment',
-                    textColor: textColor,
-                    highlightColor: highlightColor,
-                    onTap: () => context.push(AppRoutePaths.citizenHistory),
-                  ),
-                  _ProfileOptionTile(
-                    icon: Icons.location_on_outlined,
-                    label: 'Track My Waste',
-                    textColor: textColor,
-                    highlightColor: highlightColor,
-                    onTap: () => context.push(AppRoutePaths.citizenTrack),
-                  ),
-                  _ProfileOptionTile(
-                    icon: Icons.star_rate_outlined,
-                    label: 'Rate Last Collection',
-                    textColor: textColor,
-                    highlightColor: highlightColor,
-                    onTap: () => _showComingSoon(context, 'Rating feature'),
-                  ),
-                  _ProfileOptionTile(
-                    icon: Icons.payments_outlined,
-                    label: 'View Charges & Fines',
-                    textColor: textColor,
-                    highlightColor: highlightColor,
-                    onTap: () =>
-                        _showComingSoon(context, 'Charges & fines section'),
-                  ),
-                  _ProfileThemeToggle(
-                    textColor: textColor,
-                    secondaryText: secondaryText,
-                    highlightColor: highlightColor,
-                  ),
-                  _LanguageSettingsCard(
-                    textColor: textColor,
-                    secondaryText: secondaryText,
-                    highlightColor: highlightColor,
-                    options: _supportedLanguages,
-                    selectedCode: _selectedLanguageCode,
-                    onChanged: _onLanguageChanged,
-                  ),
-                  _FontSizeSettingsCard(
-                    textColor: textColor,
-                    secondaryText: secondaryText,
-                    highlightColor: highlightColor,
-                    options: _fontSizePresets,
-                    selectedScale: _fontScale,
-                    onChanged: _onFontScaleChanged,
-                  ),
-                  _ProfileOptionTile(
-                    icon: Icons.feedback_outlined,
-                    label: 'Raise Grievance (Help Desk)',
-                    textColor: textColor,
-                    highlightColor: highlightColor,
-                     onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
-                  ),
-                  const SizedBox(height: 12),
-                  _LogoutTile(
-                    textColor: textColor,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
@@ -403,32 +403,17 @@ class _LanguageSettingsCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Language',
+                  AppLocalizations.of(context).changeLanguage,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: textColor,
                     fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: highlightColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'Preview',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: highlightColor,
-                      fontWeight: FontWeight.w700,
-                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
             Text(
-              'Pick the language you are most comfortable with. Content will adapt once localization is rolled out.',
+              AppLocalizations.of(context).changeLanguageSubtitle,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: secondaryText,
               ),

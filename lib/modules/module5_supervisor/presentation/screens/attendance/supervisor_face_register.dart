@@ -13,6 +13,7 @@ import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/data/repositories/face_config_repository.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
 /// Face enrollment for the supervisor. Captures a front-camera selfie and
@@ -44,11 +45,16 @@ class _SupervisorFaceRegisterScreenState
   bool _busy = false;
   bool _needsSettings = false;
   String? _error;
+  // Face setup as declared by the server. The backend picks its engine in its
+  // own .env, so the capture hint and the "is it usable right now" check come
+  // from there rather than being hard-coded per engine in the app.
+  FaceConfig _faceConfig = FaceConfig.fallback;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadFaceConfig();
     _initCamera();
   }
 
@@ -64,6 +70,14 @@ class _SupervisorFaceRegisterScreenState
     if (state == AppLifecycleState.resumed && _needsSettings) {
       _initCamera();
     }
+  }
+
+  Future<void> _loadFaceConfig() async {
+    // Never throws (see FaceConfigRepository.load) and never blocks the
+    // camera: a backend that can't be reached just leaves the permissive
+    // fallback in place, exactly as attendance behaved before this existed.
+    final config = await FaceConfigRepository().load();
+    if (mounted) setState(() => _faceConfig = config);
   }
 
   Future<void> _initCamera() async {
@@ -157,6 +171,16 @@ class _SupervisorFaceRegisterScreenState
   Future<void> _captureAndRegister() async {
     final controller = _controller;
     if (_busy || controller == null || !controller.value.isInitialized) return;
+
+    // The server already told us its face engine is down or misconfigured, so
+    // say that now rather than after the user has taken a selfie and waited
+    // for an upload that was always going to fail.
+    if (!_faceConfig.ready) {
+      _snack(_faceConfig.reason?.trim().isNotEmpty == true
+          ? _faceConfig.reason!
+          : 'Face registration is unavailable right now. Please try again later.');
+      return;
+    }
 
     setState(() => _busy = true);
     try {
@@ -271,9 +295,10 @@ class _SupervisorFaceRegisterScreenState
                   color: Colors.black.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
-                  'Register only your face',
-                  style: TextStyle(
+                child: Text(
+                  _faceConfig.guidance ?? 'Register only your face',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,

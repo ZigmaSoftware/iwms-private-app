@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:animations/animations.dart';
 import 'package:intl/intl.dart';
 import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/core/network/trip_stale_signal.dart';
 import 'package:iwms_private_app/core/ui/app_copy.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
@@ -27,7 +29,10 @@ import 'package:iwms_private_app/logic/auth/auth_event.dart';
 import 'package:iwms_private_app/logic/auth/auth_state.dart';
 import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/push/push_notification_service.dart';
+import 'package:iwms_private_app/core/permissions/app_screens.dart';
+import 'package:iwms_private_app/core/permissions/feature_access.dart';
 import 'package:iwms_private_app/core/map/map_style.dart';
+import 'package:iwms_private_app/core/map/safe_camera_fit.dart';
 import 'package:iwms_private_app/core/ors_service.dart';
 import 'package:iwms_private_app/core/network/authorized_dio.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
@@ -139,6 +144,15 @@ class _TripPlannedStop {
 /// (Assignments folded into Home — trip history opens from a quick action.)
 enum _DriverTab { home, map, attendance, profile }
 
+const Map<_DriverTab, String?> _driverTabScreens = {
+  _DriverTab.home: AppScreens.driverTrips,
+  _DriverTab.map: AppScreens.driverTrips,
+  _DriverTab.attendance: AppScreens.driverAttendance,
+  // Profile is self-service and gives the user a way to sign out after a valid
+  // app-module login.
+  _DriverTab.profile: null,
+};
+
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
 
@@ -164,6 +178,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   // that household trip so the map plots customer locations instead of bins.
   OperatorTripToday? _mapTrip;
   List<OperatorTripToday> _todayTrips = [];
+  List<OperatorServiceNotice> _serviceNotices = const [];
   OperatorTripHistoryDetail? _activeTripDetail;
   LatLng? _staticDriverLocation;
   bool _loadingCustomers = true;
@@ -175,10 +190,32 @@ class _DriverHomePageState extends State<DriverHomePage> {
   final StaffNotificationRepository _notificationRepository =
       StaffNotificationRepository();
   int _unreadNotificationCount = 0;
+  StreamSubscription<Map<String, dynamic>>? _pushEvents;
+  StreamSubscription<String>? _staleTripEvents;
 
   @override
   void initState() {
     super.initState();
+    // The backend refused a write because this trip was closed or the stop
+    // moved to a continuation trip — reload to show the current trip.
+    _staleTripEvents = TripStaleSignal.events.listen((_) {
+      if (mounted) _loadAssignmentsForDriver();
+    });
+    // A customer tapping "I'm home now" pushes `customer_available` — reload
+    // so the household jumps to the top with its badge straight away.
+    _pushEvents = PushNotificationService.instance.events.listen((data) {
+      if (data['event'] == 'customer_available' && mounted) {
+        _loadAssignmentsForDriver();
+        _refreshUnreadNotificationCount();
+      }
+      if ((data['type'] == 'NO_COLLECTION_TODAY' ||
+              data['type'] == 'COLLECTION_RESTORED' ||
+              data['type'] == 'TRIP_ASSIGNED') &&
+          mounted) {
+        _loadAssignmentsForDriver();
+        _refreshUnreadNotificationCount();
+      }
+    });
     // Hydrate the persisted light/dark choice before first paint settles.
     CaptainThemeStore.load();
     // Hydrate the persisted Household/Bin toggle choice the same way.
@@ -205,6 +242,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
     _loadAssignmentsForDriver();
   }
 
+  @override
+  void dispose() {
+    _pushEvents?.cancel();
+    _staleTripEvents?.cancel();
+    super.dispose();
+  }
+
   Future<void> _refreshUnreadNotificationCount() async {
     try {
       final count = await _notificationRepository.fetchUnreadCount();
@@ -228,9 +272,14 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   LatLng _resolveDriverLocation(VehicleModel? vehicle) {
-    if (_staticDriverLocation != null) return _staticDriverLocation!;
+    final static = _staticDriverLocation;
+    if (isValidLatLng(static)) return static!;
     if (vehicle == null) return GammaGeofenceConfig.center;
-    return LatLng(vehicle.latitude, vehicle.longitude);
+    // A tracker that hasn't reported a fix yet can send 0/0, an out-of-range
+    // value or a non-number — none of which are somewhere to put the camera.
+    return tryLatLng(vehicle.latitude, vehicle.longitude,
+            debugSource: 'vehicle ${vehicle.id}') ??
+        GammaGeofenceConfig.center;
   }
 
   VehicleModel _chooseDriverVehicle(List<VehicleModel> vehicles) {
@@ -241,7 +290,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   void _centerOnDriver(LatLng target) {
-    _mapController.move(target, 15.0);
+    safeMove(_mapController, target, 15.0, debugSource: '_centerOnDriver');
   }
 
   bool _tripMatchesMode(OperatorTripToday trip, CollectionMode mode) {
@@ -376,7 +425,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
     if (CollectionModeStore.mode.value == mode) return;
     await CollectionModeStore.set(mode);
     if (!mounted) return;
-    _applyCollectionModeState(mode, preferredTripId: _todayTrip?.assignmentUniqueId);
+    _applyCollectionModeState(mode,
+        preferredTripId: _todayTrip?.assignmentUniqueId);
   }
 
   @override
@@ -421,7 +471,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
             // flips so every mode-aware token re-resolves.
             return ValueListenableBuilder<bool>(
               valueListenable: CaptainThemeStore.isDark,
-              builder: (context, _, __) => ValueListenableBuilder<CollectionMode>(
+              builder: (context, _, __) =>
+                  ValueListenableBuilder<CollectionMode>(
                 // Rebuild when the Household/Bin toggle flips, so the
                 // carousel, home list, map and scan button all switch to
                 // showing only the selected mode's trips.
@@ -452,11 +503,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
     VehicleModel? selectedVehicle,
     CollectionMode collectionMode,
   ) {
+    final slots = _availableTabs(context);
+    if (!slots.contains(_activeTab)) {
+      _activeTab = slots.first;
+    }
     final pullInHeader =
         _activeTab == _DriverTab.attendance || _activeTab == _DriverTab.profile;
     // The toggle is only relevant on tabs that actually show trips.
     final showCollectionToggle =
         _activeTab == _DriverTab.home || _activeTab == _DriverTab.map;
+    final canScan = context.canSeeScreen(AppScreens.driverBins) ||
+        context.canSeeScreen(AppScreens.driverHouseholds);
+    final activeIndex = slots.indexOf(_activeTab).clamp(0, slots.length - 1);
 
     return Scaffold(
       backgroundColor: DriverTheme.background,
@@ -508,37 +566,71 @@ class _DriverHomePageState extends State<DriverHomePage> {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: CaptainScanFab(onPressed: _openScanner),
+      floatingActionButton:
+          canScan ? CaptainScanFab(onPressed: _openScanner) : null,
       bottomNavigationBar: CaptainNavBar(
-        activeIndex: _activeTab.index,
+        activeIndex: activeIndex,
         onTabSelected: (index) {
-          final tab = _tabFromIndex(index);
+          final tab = slots[index];
           if (_activeTab != tab) setState(() => _activeTab = tab);
         },
-        items: const [
-          CaptainNavItem(
-            icon: Icons.home_rounded,
-            label: AppCopy.driverTabHome,
-          ),
-          CaptainNavItem(
-            icon: Icons.map_rounded,
-            label: AppCopy.driverTabMap,
-          ),
-          CaptainNavItem(
-            icon: Icons.event_available_rounded,
-            label: AppCopy.driverTabAttendance,
-            blink: true,
-          ),
-          CaptainNavItem(
-            icon: Icons.person_outline_rounded,
-            label: AppCopy.driverTabProfile,
-          ),
-        ],
+        items: slots.map(_navItemFor).toList(),
       ),
     );
   }
 
+  /// Always the full 4 tabs: [CaptainNavBar] is a fixed layout — two slots
+  /// either side of a centred Scan button — with a hard assertion on that
+  /// count, not a list that can shrink. A driver missing one screen's
+  /// permission still gets a nav slot; [_buildTab] shows a "no access"
+  /// placeholder in its body instead of a real screen. Losing the slot
+  /// crashed the whole app the moment one grant was missing.
+  List<_DriverTab> _availableTabs(BuildContext context) => _DriverTab.values;
+
+  CaptainNavItem _navItemFor(_DriverTab tab) {
+    switch (tab) {
+      case _DriverTab.home:
+        return const CaptainNavItem(
+          icon: Icons.home_rounded,
+          label: AppCopy.driverTabHome,
+        );
+      case _DriverTab.map:
+        return const CaptainNavItem(
+          icon: Icons.map_rounded,
+          label: AppCopy.driverTabMap,
+        );
+      case _DriverTab.attendance:
+        return const CaptainNavItem(
+          icon: Icons.event_available_rounded,
+          label: AppCopy.driverTabAttendance,
+        );
+      case _DriverTab.profile:
+        return const CaptainNavItem(
+          icon: Icons.person_outline_rounded,
+          label: AppCopy.driverTabProfile,
+        );
+    }
+  }
+
   Future<void> _loadAssignmentsForDriver() async {
+    if (!context.canSeeScreen(AppScreens.driverTrips)) {
+      setState(() {
+        _loadingCustomers = false;
+        _loadingAssignments = false;
+        _loadingTrip = false;
+        _customerError = null;
+        _assignmentError = null;
+        _tripError = null;
+        _todayTrips = const [];
+        _todayTrip = null;
+        _mapTrip = null;
+        _currentAssignments = const [];
+        _historyAssignments = const [];
+        _activeTripDetail = null;
+      });
+      return;
+    }
+
     setState(() {
       _loadingCustomers = true;
       _loadingAssignments = true;
@@ -644,6 +736,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _tripStops = tripStops;
         _tripPolyline = const [];
         _todayTrips = todayTrips;
+        _serviceNotices = _tripRepository.lastServiceNotices;
         _todayTrip = todayTrip;
         _mapTrip = mapTrip;
         _activeTripId = activeTrip?.assignmentUniqueId;
@@ -698,9 +791,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       final households = [...trip.householdCollections]
         ..sort((a, b) => a.sequence.compareTo(b.sequence));
       for (final h in households) {
-        final lat = h.latitude;
-        final lng = h.longitude;
-        if (lat == null || lng == null) continue;
+        final location =
+            tryLatLng(h.latitude, h.longitude, debugSource: 'household stop');
+        if (location == null) continue;
         stops.add(
           _DriverAssignmentStop(
             assignmentId: h.uniqueId,
@@ -711,7 +804,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
             customerName: h.customerName,
             assignmentType: 'household_collection',
             shift: detail.summary.scheduledTime ?? 'scheduled',
-            location: LatLng(lat, lng),
+            location: location,
             sequence: h.sequence,
             status: h.isCollected
                 ? _CustomerStatus.collected
@@ -723,9 +816,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
 
     for (final cp in detail.collectionPoints) {
-      final lat = cp.collectionPoint.latitude;
-      final lng = cp.collectionPoint.longitude;
-      if (lat == null || lng == null) continue;
+      final location = tryLatLng(
+        cp.collectionPoint.latitude,
+        cp.collectionPoint.longitude,
+        debugSource: 'collection point ${cp.collectionPoint.uniqueId}',
+      );
+      if (location == null) continue;
       final seq = cp.sequence > 0 ? cp.sequence : tripStops.length + 1;
       stops.add(
         _DriverAssignmentStop(
@@ -736,7 +832,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           customerName: cp.collectionPoint.name,
           assignmentType: detail.summary.wasteType.name,
           shift: detail.summary.scheduledTime ?? 'scheduled',
-          location: LatLng(lat, lng),
+          location: location,
           sequence: seq,
           status: cp.isCollected
               ? _CustomerStatus.collected
@@ -747,7 +843,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _TripPlannedStop(
           plannedStopId: cp.uniqueId,
           sequence: seq,
-          location: LatLng(lat, lng),
+          location: location,
           collectionPointId: cp.collectionPoint.uniqueId,
           propertyType: cp.status,
           isCollected: cp.isCollected,
@@ -786,7 +882,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
   /// A synthetic driver start near a cluster of [points] (offset to the SW of
   /// their bounding box). Used both to place the driver marker and as the
   /// anchor for the route-order re-sequence, so the two agree.
-  LatLng _staticLocationNear(List<LatLng> points) {
+  LatLng _staticLocationNear(List<LatLng> rawPoints) {
+    // min()/max() propagate NaN, so one bad coordinate anywhere in this list
+    // would make the whole anchor NaN — and this anchor becomes the map's
+    // initialCenter, which bricks the tile layer permanently.
+    final points = rawPoints.where(isValidLatLng).toList();
     if (points.isEmpty) return GammaGeofenceConfig.center;
 
     var minLat = points.first.latitude;
@@ -804,7 +904,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
     final centerLng = (minLng + maxLng) / 2;
     final latOffset = max(0.003, (maxLat - minLat) * 0.18);
     final lngOffset = max(0.003, (maxLng - minLng) * 0.18);
-    return LatLng(centerLat - latOffset, centerLng - lngOffset);
+    return tryLatLng(centerLat - latOffset, centerLng - lngOffset,
+            debugSource: 'trip anchor') ??
+        GammaGeofenceConfig.center;
   }
 
   /// Re-order a bin trip's collection points into a driver-first visiting order
@@ -910,10 +1012,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState,
       String empIdFromState, VehicleModel? vehicle) {
+    final requiredScreen = _driverTabScreens[tab];
+    if (requiredScreen != null && !context.canSeeScreen(requiredScreen)) {
+      return _NoAccessTab(tabLabel: _navItemFor(tab).label);
+    }
+
     switch (tab) {
       case _DriverTab.home:
         return CaptainHomeTab(
           trips: _visibleTodayTrips,
+          serviceNotices: _serviceNotices,
           closedTripCount:
               _closedTripCountForMode(CollectionModeStore.mode.value),
           loading: _loadingTrip,
@@ -1034,7 +1142,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
 
     final selected = _todayTrip;
-    if (selected == null || !selected.isHousehold) {
+    if (selected == null || !selected.isStarted) {
+      AppFlash.warning(context, 'Start trip first.');
+      return;
+    }
+
+    if (!selected.isHousehold) {
       final result = await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const OperatorTripScanScreen()),
       );
@@ -1153,6 +1266,49 @@ class _ScanChoiceTile extends StatelessWidget {
 // ============================================================
 // PART 3: HomeTab Widget with Map and Navigation
 // ============================================================
+/// Shown in place of a tab's real content when the signed-in driver has not
+/// been granted the screen behind it. The nav slot itself always stays —
+/// [CaptainNavBar] is a fixed 4-slot layout — so only the body changes.
+class _NoAccessTab extends StatelessWidget {
+  const _NoAccessTab({required this.tabLabel});
+
+  final String tabLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: DriverTheme.background,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 40,
+            color: DriverTheme.mutedText,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "You don't have access to $tabLabel.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: DriverTheme.mutedText, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ask your administrator to grant it in Staff Access Configuration.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: DriverTheme.mutedText.withOpacity(0.7),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HomeTab extends StatefulWidget {
   const _HomeTab({
     required this.mapController,
@@ -1268,8 +1424,23 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     });
   }
 
+  /// Keeps [_driverLocation] to a coordinate the camera can actually sit at.
+  ///
+  /// This used to be a passthrough that returned its argument unchanged, so
+  /// nothing stopped a NaN reaching `MapOptions.initialCenter` below — and
+  /// once the camera centre is NaN, flutter_map's tile layer throws
+  /// "Infinity or NaN toInt" on every single map event, which is what turned
+  /// the whole map into a red error box. Falling back to the last known-good
+  /// position (or the site centre) keeps the map usable while the real fix
+  /// for a bad coordinate happens upstream, in the data.
   LatLng _sanitizeDriverLocation(LatLng location) {
-    return location;
+    if (isValidLatLng(location)) return location;
+    if (kDebugMode) {
+      debugPrint('⚠️ driver location was not a valid coordinate: $location');
+    }
+    return isValidLatLng(_driverLocation)
+        ? _driverLocation
+        : GammaGeofenceConfig.center;
   }
 
   @override
@@ -1470,12 +1641,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       _fitDriverAndNearestStop();
       return;
     }
-    widget.mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: LatLngBounds.fromPoints(points),
-        padding: _overviewFitPadding,
-      ),
-    );
+    safeFitBounds(widget.mapController, points, padding: _overviewFitPadding);
   }
 
   /// The stop (household customer or bin collection point) closest to the
@@ -1505,46 +1671,34 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   void _fitDriverAndNearestStop() {
     final nearest = _nearestStopLocation();
     if (nearest == null) {
-      widget.mapController.move(_driverLocation, 15.0);
+      safeMove(widget.mapController, _driverLocation, 15.0,
+          debugSource: '_fitDriverAndNearestStop');
       return;
     }
-    final bounds = LatLngBounds.fromPoints([_driverLocation, nearest]);
-    widget.mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: bounds,
-        padding: _overviewFitPadding,
-      ),
+    safeFitBounds(
+      widget.mapController,
+      [_driverLocation, nearest],
+      padding: _overviewFitPadding,
     );
   }
 
   void _fitDriverAndNextCustomer() {
     if (_customers.isEmpty) return;
 
-    final bounds = LatLngBounds.fromPoints([
-      _driverLocation,
-      ..._customers.map((customer) => customer.location),
-    ]);
-
-    widget.mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: bounds,
-        padding: _overviewFitPadding,
-      ),
+    safeFitBounds(
+      widget.mapController,
+      [_driverLocation, ..._customers.map((customer) => customer.location)],
+      padding: _overviewFitPadding,
     );
   }
 
   void _fitTripRoute() {
     if (_tripStops.isEmpty) return;
-    final bounds = LatLngBounds.fromPoints([
-      _driverLocation,
-      ..._tripStops.map((stop) => stop.location),
-    ]);
 
-    widget.mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: bounds,
-        padding: _overviewFitPadding,
-      ),
+    safeFitBounds(
+      widget.mapController,
+      [_driverLocation, ..._tripStops.map((stop) => stop.location)],
+      padding: _overviewFitPadding,
     );
   }
 
@@ -1604,7 +1758,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
     Future.delayed(const Duration(milliseconds: 100), () {
       if (!mounted) return;
-      widget.mapController.move(targetCenter, 17.5);
+      safeMove(widget.mapController, targetCenter, 17.5,
+          debugSource: '_animateToNavigationView');
       widget.mapController.rotate(0); // North-up orientation
     });
   }
@@ -1614,7 +1769,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       if (_tripStops.isNotEmpty) {
         _fitTripRoute();
       } else {
-        widget.mapController.move(_driverLocation, 15.0);
+        safeMove(widget.mapController, _driverLocation, 15.0,
+            debugSource: '_animateToOverview');
         widget.mapController.rotate(0);
       }
       return;
@@ -1625,23 +1781,18 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       ..._customers.map((c) => c.location),
     ];
 
-    final bounds = LatLngBounds.fromPoints(allPoints);
-
     Future.delayed(const Duration(milliseconds: 100), () {
       if (!mounted) return;
-      widget.mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: bounds,
-          padding: _overviewFitPadding,
-        ),
-      );
+      safeFitBounds(widget.mapController, allPoints,
+          padding: _overviewFitPadding);
       widget.mapController.rotate(0);
     });
   }
 
   void _centerOnDriver() {
     if (_manualDriverOverride) {
-      widget.mapController.move(_driverLocation, 15.0);
+      safeMove(widget.mapController, _driverLocation, 15.0,
+          debugSource: '_centerOnDriver');
     } else {
       widget.onCenter();
     }
@@ -1650,7 +1801,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   void _zoomBy(double delta) {
     final camera = widget.mapController.camera;
     final next = (camera.zoom + delta).clamp(10.0, 18.0);
-    widget.mapController.move(camera.center, next);
+    safeMove(widget.mapController, camera.center, next, debugSource: '_zoomBy');
   }
 
   void _startDriverDrag(DragStartDetails details) {
@@ -1666,6 +1817,10 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       _driverScreenPoint!.y + details.delta.dy,
     );
     final nextLocation = widget.mapController.camera.pointToLatLng(nextPoint);
+    // Dragging the marker past the projection's usable range (or off a map
+    // whose camera is already unhappy) yields a non-finite coordinate; taking
+    // it would move the crash into the camera on the next tile update.
+    if (!isValidLatLng(nextLocation)) return;
     setState(() {
       _manualDriverOverride = true;
       _driverLocation = nextLocation;
@@ -1779,9 +1934,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     if (coords is List) {
       for (final c in coords) {
         if (c is List && c.length >= 2) {
-          final lng = toD(c[0]);
-          final lat = toD(c[1]);
-          if (lat != null && lng != null) out.add(LatLng(lat, lng));
+          final point =
+              tryLatLng(toD(c[1]), toD(c[0]), debugSource: 'route geometry');
+          if (point != null) out.add(point);
         }
       }
     }
@@ -1836,13 +1991,19 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       final stops = <_TripPlannedStop>[];
       for (final item in plannedStops) {
         if (item is! Map) continue;
-        final lat = double.tryParse(
-          item['collection_point_latitude']?.toString() ?? '',
+        // `double.tryParse` returns double.nan for the literal string "NaN"
+        // (and Infinity for "Infinity"), so a null check alone lets a
+        // non-coordinate through — tryLatLng rejects those too.
+        final location = tryLatLng(
+          double.tryParse(
+            item['collection_point_latitude']?.toString() ?? '',
+          ),
+          double.tryParse(
+            item['collection_point_longitude']?.toString() ?? '',
+          ),
+          debugSource: 'reroute planned stop',
         );
-        final lng = double.tryParse(
-          item['collection_point_longitude']?.toString() ?? '',
-        );
-        if (lat == null || lng == null) continue;
+        if (location == null) continue;
         final seqRaw = item['planned_sequence_number'] ?? item['sequence'];
         final sequence = int.tryParse(seqRaw?.toString() ?? '') ?? 0;
         final plannedStopId = (item['unique_id'] ?? '').toString();
@@ -1853,7 +2014,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           _TripPlannedStop(
             plannedStopId: plannedStopId,
             sequence: sequence > 0 ? sequence : stops.length + 1,
-            location: LatLng(lat, lng),
+            location: location,
             collectionPointId: pointId,
             propertyType: propertyType,
           ),
@@ -2249,8 +2410,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
         : (nextCustomer.sequence > 0
             ? nextCustomer.sequence - 1
             : _customers.indexWhere((c) => c.id == nextCustomer.id));
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final bottomOverlayOffset = kCaptainMapBottomOverlayOffset + bottomInset;
     // The map now carries ONLY the next-collection-point card (the daily
     // assignment carousel was removed to declutter the view); controls sit
     // just below it, or at the top when there's no next stop.
@@ -2267,7 +2426,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             child: FlutterMap(
               mapController: widget.mapController,
               options: MapOptions(
-                initialCenter: _driverLocation,
+                // Last line of defence: the camera must never START on a
+                // non-finite centre, or flutter_map's tile layer throws on
+                // every map event from the first frame onwards and the map
+                // renders as an error box.
+                initialCenter: isValidLatLng(_driverLocation)
+                    ? _driverLocation
+                    : GammaGeofenceConfig.center,
                 initialZoom: 14.5,
                 minZoom: 10,
                 maxZoom: 18,
@@ -2474,25 +2639,11 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
               ),
             ),
 
-          // Navigation action tray
-          // Navigation action tray
-          if (navigationCustomer != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: bottomOverlayOffset,
-              child: AnimatedContainer(
-                duration: _kNavigationTransitionDuration,
-                curve: Curves.easeInOut,
-                height: 120,
-                child: _NavigationActionCard(
-                  customer: navigationCustomer,
-                  distance: _getDistanceToCustomer(navigationCustomer),
-                  onComplete: () => _handleCollect(navigationCustomer),
-                  onSkip: () => _handleSkip(navigationCustomer),
-                ),
-              ),
-            ),
+          // Collect/skip is intentionally NOT offered from the map — that
+          // flow lives on the home tab (CaptainHomeTab's
+          // showHouseholdActionSheet/HouseholdCollectSheet) and the QR
+          // scanner only. The map is navigation-only: driver/house/trip-stop
+          // markers, route line, and the "stop navigation" header above.
 
           // Bottom customer carousel - compact design
           // Positioned(
@@ -2777,146 +2928,6 @@ class _NavigationHeader extends StatelessWidget {
                 ],
               ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavigationActionCard extends StatelessWidget {
-  const _NavigationActionCard({
-    required this.customer,
-    required this.distance,
-    required this.onComplete,
-    required this.onSkip,
-  });
-
-  final _DriverAssignmentStop customer;
-  final String distance;
-  final VoidCallback onComplete;
-  final VoidCallback onSkip;
-
-  @override
-  Widget build(BuildContext context) {
-    final displayName = customer.customerName?.trim().isNotEmpty == true
-        ? customer.customerName!
-        : customer.wardName;
-    final isDone = customer.status == _CustomerStatus.collected ||
-        customer.status == _CustomerStatus.skipped;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: CaptainGlassCard(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: CaptainTheme.accentGradient,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                displayName[0].toUpperCase(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                      color: CaptainTheme.strongText,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    distance,
-                    style: TextStyle(
-                      color: CaptainTheme.mutedText,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    customer.shift.replaceAll('_', ' ').toUpperCase(),
-                    style: TextStyle(
-                      color: CaptainTheme.mutedText.withValues(alpha: 0.8),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              children: [
-                SizedBox(
-                  height: 32,
-                  child: ElevatedButton(
-                    onPressed: isDone ? null : onComplete,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      backgroundColor: isDone
-                          ? CaptainTheme.mutedText.withValues(alpha: 0.3)
-                          : CaptainTheme.success,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      'Done',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: isDone ? CaptainTheme.mutedText : Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  height: 28,
-                  child: OutlinedButton(
-                    onPressed: isDone ? null : onSkip,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      side: BorderSide(
-                        color: CaptainTheme.hairline,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      'Skip',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: CaptainTheme.strongText,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),

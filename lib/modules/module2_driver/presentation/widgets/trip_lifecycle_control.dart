@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
@@ -55,8 +57,14 @@ class _TripLifecycleControlState extends State<TripLifecycleControl> {
       return _PendingRetripBanner(request: trip.retripRequest!);
     }
 
-    final isRunning = trip.isStarted &&
-        trip.status.toLowerCase() == 'in progress';
+    final isRunning =
+        trip.isStarted && trip.status.toLowerCase() == 'in progress';
+
+    // Mirrors the backend's start guard: only a not-yet-started trip is
+    // blocked; one already running on the broken vehicle can still be ended.
+    if (!trip.isStarted && (trip.vehicle?.isUnderBreakdown ?? false)) {
+      return _VehicleBreakdownBanner(vehicleNo: trip.vehicle!.vehicleNo);
+    }
 
     return SizedBox(
       width: double.infinity,
@@ -100,6 +108,9 @@ class _TripLifecycleControlState extends State<TripLifecycleControl> {
       await widget.onChanged();
     } on OperatorTripException catch (e) {
       if (mounted) AppFlash.error(context, _friendlyMessage(e));
+      // The vehicle went into breakdown since the last refresh — reload so
+      // the card shows the breakdown banner instead of Start.
+      if (e.code == 'VEHICLE_BREAKDOWN') await widget.onChanged();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -156,13 +167,14 @@ Future<void> _endTrip(
   required OperatorTripToday trip,
   required Future<void> Function() onChanged,
   void Function(bool busy)? setBusy,
-  String? reason,
+  EndTripReason? reason,
 }) async {
   setBusy?.call(true);
   try {
     final result = await GetIt.instance<OperatorTripRepository>().endTrip(
       trip.assignmentUniqueId,
-      reason: reason,
+      reason: reason?.note,
+      reasonCode: reason?.code,
     );
 
     if (result.reasonRequired) {
@@ -172,16 +184,19 @@ Future<void> _endTrip(
         context,
         pendingBinCount: result.pendingBinCount,
         pendingHouseholdCount: result.pendingHouseholdCount,
+        reasonCodes: result.reasonCodes,
+        initial: reason,
+        // Only a rejected submission has something to explain; the first
+        // prompt's detail is just "enter a reason".
+        errorText: reason != null ? result.message : null,
       );
-      if (givenReason != null &&
-          givenReason.trim().isNotEmpty &&
-          context.mounted) {
+      if (givenReason != null && context.mounted) {
         await _endTrip(
           context,
           trip: trip,
           onChanged: onChanged,
           setBusy: setBusy,
-          reason: givenReason.trim(),
+          reason: givenReason,
         );
       }
       return;
@@ -215,6 +230,8 @@ String _friendlyMessage(OperatorTripException e) {
   switch (e.code) {
     case 'TRIP_NOT_YOURS':
       return 'This trip is not assigned to you today.';
+    case 'VEHICLE_BREAKDOWN':
+      return 'This vehicle is under breakdown. Contact your supervisor.';
     default:
       return e.message.isEmpty ? 'Could not update the trip.' : e.message;
   }
@@ -223,13 +240,35 @@ String _friendlyMessage(OperatorTripException e) {
 /// Shown in place of the Start/End button while a Re-Trip request raised
 /// from this trip awaits supervisor review. No button — the driver can keep
 /// collecting elsewhere on the same trip while they wait.
-class _PendingRetripBanner extends StatelessWidget {
+class _PendingRetripBanner extends StatefulWidget {
   const _PendingRetripBanner({required this.request});
 
   final OperatorTripRetripRequest request;
 
   @override
+  State<_PendingRetripBanner> createState() => _PendingRetripBannerState();
+}
+
+class _PendingRetripBannerState extends State<_PendingRetripBanner> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final request = widget.request;
     final pending = request.pendingBinCount + request.pendingHouseholdCount;
     return Container(
       width: double.infinity,
@@ -256,6 +295,19 @@ class _PendingRetripBanner extends StatelessWidget {
                     fontSize: 13.5,
                   ),
                 ),
+                if (request.expiryLabel().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    request.expiryLabel(),
+                    style: TextStyle(
+                      color: request.remaining() == Duration.zero
+                          ? CaptainTheme.danger
+                          : CaptainTheme.gold,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   pending > 0
@@ -263,6 +315,62 @@ class _PendingRetripBanner extends StatelessWidget {
                           'left. You can keep collecting while you wait.'
                       : 'Requested to end this trip early. You can keep '
                           'collecting while you wait.',
+                  style: TextStyle(
+                    color: CaptainTheme.mutedText,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown in place of Start while the trip's vehicle is under breakdown. The
+/// supervisor either moves the trip to a replacement vehicle or marks this
+/// one repaired; either way the next refresh brings Start back.
+class _VehicleBreakdownBanner extends StatelessWidget {
+  const _VehicleBreakdownBanner({required this.vehicleNo});
+
+  final String vehicleNo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: CaptainTheme.danger.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CaptainTheme.danger.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.car_repair_rounded, size: 19, color: CaptainTheme.danger),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Vehicle under breakdown',
+                  style: TextStyle(
+                    color: CaptainTheme.strongText,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${vehicleNo.isEmpty ? 'This vehicle' : vehicleNo} can\'t '
+                  'start this trip until it is repaired or replaced. '
+                  'Contact your supervisor.',
                   style: TextStyle(
                     color: CaptainTheme.mutedText,
                     fontWeight: FontWeight.w600,
@@ -368,125 +476,232 @@ class _ConfirmEndSheet extends StatelessWidget {
   }
 }
 
-/// Mandatory reason prompt for ending a trip early. Returns the trimmed
-/// reason, or null if the driver backed out.
-Future<String?> showEndTripReasonSheet(
+/// The driver's answer to the end-early prompt: a reason category (null when
+/// the backend offered none) plus a note. The note is required only for
+/// "Other" / no category; for a listed category it's optional detail.
+class EndTripReason {
+  const EndTripReason({this.code, this.note = ''});
+
+  final String? code;
+  final String note;
+}
+
+/// Backend: TripRetripRequest.OTHER_REASON_MIN_LENGTH.
+const int _minEndReasonLength = 10;
+
+/// Mandatory reason prompt for ending a trip early. Returns the reason, or
+/// null if the driver backed out.
+Future<EndTripReason?> showEndTripReasonSheet(
   BuildContext context, {
   required int pendingBinCount,
   required int pendingHouseholdCount,
+  List<RetripReasonCode> reasonCodes = const [],
+  EndTripReason? initial,
+  String? errorText,
 }) {
-  final controller = TextEditingController();
-  return showModalBottomSheet<String>(
+  return showModalBottomSheet<EndTripReason>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (sheetContext) {
-      final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-      final pending = pendingBinCount + pendingHouseholdCount;
-      return Padding(
-        padding: EdgeInsets.only(bottom: bottomInset),
-        child: _sheetShell(
-          sheetContext,
-          children: [
-            Icon(Icons.edit_note_rounded, size: 36, color: CaptainTheme.gold),
-            const SizedBox(height: 10),
-            Text(
-              'Reason for ending early',
-              style: TextStyle(
-                color: CaptainTheme.strongText,
-                fontWeight: FontWeight.w800,
-                fontSize: 16.5,
-              ),
+    builder: (_) => _EndTripReasonSheet(
+      pendingStopCount: pendingBinCount + pendingHouseholdCount,
+      reasonCodes: reasonCodes,
+      initial: initial,
+      errorText: errorText,
+    ),
+  );
+}
+
+class _EndTripReasonSheet extends StatefulWidget {
+  const _EndTripReasonSheet({
+    required this.pendingStopCount,
+    required this.reasonCodes,
+    this.initial,
+    this.errorText,
+  });
+
+  final int pendingStopCount;
+  final List<RetripReasonCode> reasonCodes;
+  final EndTripReason? initial;
+  final String? errorText;
+
+  @override
+  State<_EndTripReasonSheet> createState() => _EndTripReasonSheetState();
+}
+
+class _EndTripReasonSheetState extends State<_EndTripReasonSheet> {
+  late final TextEditingController _note =
+      TextEditingController(text: widget.initial?.note ?? '');
+  late RetripReasonCode? _selected = widget.reasonCodes
+      .where((c) => c.value == widget.initial?.code)
+      .firstOrNull;
+
+  bool get _hasCodes => widget.reasonCodes.isNotEmpty;
+
+  /// No categories (older backend) behaves like "Other": text is the reason.
+  bool get _noteRequired => !_hasCodes || (_selected?.isOther ?? false);
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_hasCodes && _selected == null) {
+      AppFlash.warning(context, 'Choose a reason first');
+      return;
+    }
+    final text = _note.text.trim();
+    if (_noteRequired) {
+      if (text.isEmpty) {
+        AppFlash.warning(context, 'Enter a reason first');
+        return;
+      }
+      if (text.length < _minEndReasonLength) {
+        AppFlash.warning(
+          context,
+          'Reason must be at least $_minEndReasonLength characters',
+        );
+        return;
+      }
+    }
+    Navigator.of(context).pop(EndTripReason(code: _selected?.value, note: text));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final pending = widget.pendingStopCount;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: _sheetShell(
+        context,
+        children: [
+          Icon(Icons.edit_note_rounded, size: 36, color: CaptainTheme.gold),
+          const SizedBox(height: 10),
+          Text(
+            'Reason for ending early',
+            style: TextStyle(
+              color: CaptainTheme.strongText,
+              fontWeight: FontWeight.w800,
+              fontSize: 16.5,
             ),
-            const SizedBox(height: 6),
-            Text(
-              pending > 0
-                  ? '$pending stop(s) are still pending. Tell your '
-                      'supervisor why you need to stop now — they\'ll '
-                      'arrange the rest.'
-                  : 'Tell your supervisor why you need to stop now.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: CaptainTheme.mutedText,
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-                height: 1.4,
-              ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            pending > 0
+                ? '$pending stop(s) are still pending. Tell your '
+                    'supervisor why you need to stop now — they\'ll '
+                    'arrange the rest.'
+                : 'Tell your supervisor why you need to stop now.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: CaptainTheme.mutedText,
+              fontWeight: FontWeight.w600,
+              fontSize: 12.5,
+              height: 1.4,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLines: 3,
-              minLines: 2,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: 'e.g. Vehicle breakdown, running out of shift...',
-                filled: true,
-                fillColor: CaptainTheme.surfaceMuted,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.all(14),
-              ),
-              style: TextStyle(color: CaptainTheme.strongText),
-            ),
-            const SizedBox(height: 16),
-            Row(
+          ),
+          if (_hasCodes) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(null),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      side: BorderSide(color: CaptainTheme.hairline),
-                    ),
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: CaptainTheme.strongText,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final text = controller.text.trim();
-                      if (text.isEmpty) {
-                        AppFlash.warning(sheetContext, 'Enter a reason first');
-                        return;
-                      }
-                      Navigator.of(sheetContext).pop(text);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: CaptainTheme.accent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Submit',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+                for (final code in widget.reasonCodes)
+                  ChoiceChip(
+                    label: Text(code.label),
+                    selected: _selected?.value == code.value,
+                    onSelected: (_) => setState(() => _selected = code),
+                    selectedColor: CaptainTheme.accent,
+                    backgroundColor: CaptainTheme.surfaceMuted,
+                    showCheckmark: false,
+                    side: BorderSide(color: CaptainTheme.hairline),
+                    labelStyle: TextStyle(
+                      color: _selected?.value == code.value
+                          ? Colors.white
+                          : CaptainTheme.strongText,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
                     ),
                   ),
-                ),
               ],
             ),
           ],
-        ),
-      );
-    },
-  );
+          const SizedBox(height: 16),
+          TextField(
+            controller: _note,
+            autofocus: !_hasCodes,
+            maxLines: 3,
+            minLines: 2,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: _noteRequired
+                  ? (_hasCodes
+                      ? 'Describe the reason (at least $_minEndReasonLength characters)'
+                      : 'e.g. Vehicle breakdown, running out of shift...')
+                  : 'Add a note (optional)',
+              filled: true,
+              fillColor: CaptainTheme.surfaceMuted,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(14),
+              errorText: widget.errorText,
+              errorMaxLines: 3,
+            ),
+            style: TextStyle(color: CaptainTheme.strongText),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(null),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    side: BorderSide(color: CaptainTheme.hairline),
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: CaptainTheme.strongText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CaptainTheme.accent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Submit',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Client-side explainer shown when the driver taps a stop before pressing
@@ -534,7 +749,8 @@ void showStartRequiredSheet(BuildContext context) {
               ),
               elevation: 0,
             ),
-            child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text('Got it',
+                style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ),
       ],

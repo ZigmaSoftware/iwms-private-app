@@ -240,7 +240,8 @@ class _SupervisorTeamsScreenState extends State<SupervisorTeamsScreen> {
       builder: (context, state) {
         final indexed = _teams.asMap().entries.toList();
         final assigned = indexed
-            .where((e) => _assignmentsFor(e.value, state.assignments).isNotEmpty)
+            .where(
+                (e) => _assignmentsFor(e.value, state.assignments).isNotEmpty)
             .toList();
         final unassigned = indexed
             .where((e) => _assignmentsFor(e.value, state.assignments).isEmpty)
@@ -341,9 +342,10 @@ class _SupervisorTeamsScreenState extends State<SupervisorTeamsScreen> {
         itemCount: entries.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, i) {
-          final team = entries[i].value;
-          final teamAssignments = _assignmentsFor(team, assignments);
+          final rawTeam = entries[i].value;
+          final teamAssignments = _assignmentsFor(rawTeam, assignments);
           final assignment = _primaryAssignment(teamAssignments);
+          final team = rawTeam.withCrewFallback(assignment);
           return _TeamCard(
             team: team,
             index: entries[i].key,
@@ -388,20 +390,19 @@ class _SupervisorTeamsScreenState extends State<SupervisorTeamsScreen> {
     SupervisorTeam team,
     List<SupervisorAssignment> assignments,
   ) {
-    final matches = assignments
-        .where((a) => a.staffTemplateId == team.uniqueId)
-        .toList()
-      ..sort((a, b) {
-        final rankA = _assignmentSortRank(a);
-        final rankB = _assignmentSortRank(b);
-        if (rankA != rankB) return rankA.compareTo(rankB);
-        final dateA = a.tripDate;
-        final dateB = b.tripDate;
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-        return dateA.compareTo(dateB);
-      });
+    final matches =
+        assignments.where((a) => a.staffTemplateId == team.uniqueId).toList()
+          ..sort((a, b) {
+            final rankA = _assignmentSortRank(a);
+            final rankB = _assignmentSortRank(b);
+            if (rankA != rankB) return rankA.compareTo(rankB);
+            final dateA = a.tripDate;
+            final dateB = b.tripDate;
+            if (dateA == null && dateB == null) return 0;
+            if (dateA == null) return 1;
+            if (dateB == null) return -1;
+            return dateA.compareTo(dateB);
+          });
     return matches;
   }
 
@@ -422,8 +423,9 @@ class _SupervisorTeamsScreenState extends State<SupervisorTeamsScreen> {
   }
 
   Future<void> _onEditTeam(SupervisorTeam team) async {
-    final onTrip = _assignmentsFor(team, context.read<SupervisorBloc>().state.assignments)
-        .any((a) => a.isInProgress);
+    final onTrip =
+        _assignmentsFor(team, context.read<SupervisorBloc>().state.assignments)
+            .any((a) => a.isInProgress);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -569,7 +571,8 @@ class _TeamCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _statusColor.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: _statusColor.withValues(alpha: 0.4)),
+                  border:
+                      Border.all(color: _statusColor.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   _onTrip ? 'ON TRIP' : team.status.toUpperCase(),
@@ -690,8 +693,9 @@ class _TeamCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
-              color: (isPresent ? SupervisorTheme.success : SupervisorTheme.danger)
-                  .withValues(alpha: 0.12),
+              color:
+                  (isPresent ? SupervisorTheme.success : SupervisorTheme.danger)
+                      .withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -699,8 +703,9 @@ class _TeamCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w800,
-                color:
-                    isPresent ? SupervisorTheme.success : SupervisorTheme.danger,
+                color: isPresent
+                    ? SupervisorTheme.success
+                    : SupervisorTheme.danger,
               ),
             ),
           ),
@@ -805,7 +810,8 @@ class _AlternateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: SupervisorTheme.surface,
         borderRadius: SupervisorTheme.cardRadius,
-        border: Border.all(color: SupervisorTheme.hairline.withValues(alpha: 0.6)),
+        border:
+            Border.all(color: SupervisorTheme.hairline.withValues(alpha: 0.6)),
         boxShadow: SupervisorTheme.softShadow,
       ),
       child: Column(
@@ -828,7 +834,8 @@ class _AlternateCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _statusColor.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: _statusColor.withValues(alpha: 0.4)),
+                  border:
+                      Border.all(color: _statusColor.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   alt.approvalStatus.toUpperCase(),

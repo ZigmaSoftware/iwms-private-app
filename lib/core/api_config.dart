@@ -27,6 +27,12 @@ class ApiConfig {
   // Attendance module (face registration/recognition, daily register,
   // staff profile) was moved under this prefix on the government backend.
   static const String attendanceBase = '${desktopBase}attendance/';
+
+  /// Server-declared face-recognition setup for attendance (which engine is
+  /// active, whether it is usable right now, capture rules). Lets the backend
+  /// switch face providers via its own .env with no app release — see
+  /// `FaceConfigRepository`.
+  static const String attendanceFaceConfig = '${attendanceBase}face-config/';
   static const bool legacyRoleAssignEnabled = false;
   static const bool legacyTripAssignEnabled = false;
   static const String wasteSummaryEndpoint =
@@ -44,8 +50,14 @@ class ApiConfig {
       '${desktopBase}customer-masters/customercreations/';
   static const String registerFcmToken =
       '${desktopBase}customer-masters/customercreations/register-fcm-token/';
+  // "staff-creations", not "user-creations" — the backend's router group and
+  // the underlying model package (app.models.user_creations ->
+  // app.models.staff_creations) were both renamed in a dev merge. This one
+  // was left pointing at the old URL, so every registration attempt 404'd
+  // silently (the client only debugPrints a failed registration, never
+  // surfaces it) — no driver/operator/supervisor ever got a push as a result.
   static const String registerStaffFcmToken =
-      '${desktopBase}user-creations/staffcreation/register-fcm-token/';
+      '${desktopBase}staff-creations/staffcreation/register-fcm-token/';
 
   /// Driver-reported trip delays (puncture, traffic, minor repair) — a delay
   /// does not stop the trip, unlike a breakdown.
@@ -79,6 +91,11 @@ class ApiConfig {
       '${desktopBase}citizen/complaint-tickets/';
   static const String citizenGrievanceMeta =
       '${desktopBase}citizen/complaint-tickets/meta/';
+  // Today's household pickup status + "I'm home now" (citizen-scoped).
+  static const String citizenPickupToday =
+      '${desktopBase}citizen/my-pickup-today/';
+  static const String citizenPickupImHome =
+      '${desktopBase}citizen/my-pickup-today/im-home/';
   // --- Grievance / complaint: supervisor / staff (team + department scoped) ---
   // `complaint-ticket/grievance-tickets/` supports {id}/status/,
   // {id}/escalate/, {id}/resolve/ actions matching the supervisor
@@ -105,8 +122,10 @@ class ApiConfig {
       '${desktopBase}schedule-operations/daily-trip-collection-points/';
   static const String tripRoutePlans =
       '${desktopBase}schedule-setup/trip-plans/';
+  // Trip-plan stops are now exposed through trip plan payloads/static-route
+  // actions, not as a standalone router resource.
   static const String tripPlannedStops =
-      '${desktopBase}schedule-masters/trip-plan-collection-points/';
+      '${desktopBase}schedule-setup/trip-plans/';
   static const String tripRouteGeometry =
       '${desktopBase}schedule-operations/daily-trip-collection-points/tracking/';
   static const String tripExecutionStops =
@@ -115,17 +134,25 @@ class ApiConfig {
       '${desktopBase}schedule-operations/daily-trip-collection-points/optimize-route/';
   static const String tripGenerate =
       '${desktopBase}schedule-operations/daily-trip-assignments/generate-daily/';
+  static const String supervisorTodayPlanOptions =
+      '${desktopBase}schedule-operations/daily-trip-assignments/today-plan-options/';
+  static const String supervisorGenerateSelected =
+      '${desktopBase}schedule-operations/daily-trip-assignments/generate-selected/';
+  static const String supervisorNoCollection =
+      '${desktopBase}schedule-operations/daily-trip-assignments/no-collection/';
+  static const String supervisorRevokeNoCollection =
+      '${desktopBase}schedule-operations/daily-trip-assignments/revoke-no-collection/';
   static const String tripDriverRoute =
       '${desktopBase}schedule-operations/daily-trip-collection-points/tracking/';
   static const String staffTemplates =
       '${desktopBase}schedule-setup/staff-templates/';
   static const String vehicles =
       '${desktopBase}transport-masters/vehicle-creation/';
-  static const String users = '${desktopBase}user-creations/users-creation/';
+  static const String users = '${desktopBase}staff-creations/staffcreation/';
   static const String subproperties =
       '${desktopBase}waste-types/subproperties/';
   static const String wards = '${desktopBase}masters/panchayat/';
-  static const String zones = '${desktopBase}masters/hierarchy-nodes/';
+  static const String zones = '${desktopBase}masters/zones/';
 
   // Operator-mobile flow
   static const String operatorMyTripToday =

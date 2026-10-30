@@ -43,6 +43,23 @@ Color _statusColor(String? code) {
   }
 }
 
+/// Who the citizen should understand is handling their complaint.
+///
+/// The backend assigns a ticket to a named staff member and escalates it up
+/// the project's staff hierarchy on an SLA breach, so the responsible person
+/// changes over the ticket's life — [GrievanceTicket.handlerName] already
+/// resolves to whichever of the two currently holds it. "Grievance Desk" is
+/// the fallback for a ticket nobody covers yet (no staff member's access
+/// configuration matches its ward), which is a real state right after intake.
+String _handlerLine(GrievanceTicket t) {
+  final name = t.handlerName;
+  final role = t.handlerRole;
+  if (name == null && role == null) return 'Grievance Desk';
+  if (name == null) return role!;
+  if (role == null) return name;
+  return '$name · $role';
+}
+
 String _fmt(DateTime? d) =>
     d == null ? '—' : DateFormat('dd MMM, hh:mm a').format(d.toLocal());
 
@@ -232,8 +249,7 @@ class _GrievanceStatusScreenState extends State<GrievanceStatusScreen> {
             const SizedBox(height: 8),
             _row(Icons.folder_outlined,
                 '${t.categoryName ?? '-'}${t.subcategoryName != null ? ' › ${t.subcategoryName}' : ''}'),
-            _row(Icons.groups_outlined,
-                '${t.assignedTeamName ?? 'Grievance Desk'}${t.assignedStaffName != null ? ' · ${t.assignedStaffName}' : ''}'),
+            _row(Icons.person_outline, _handlerLine(t)),
             _row(Icons.schedule, _fmt(t.createdAt)),
           ],
         ),
@@ -359,9 +375,9 @@ class _DetailSheetState extends State<_DetailSheet> {
           _kv('Category',
               '${ticket.categoryName ?? '-'}${ticket.subcategoryName != null ? ' › ${ticket.subcategoryName}' : ''}'),
           _kv('Priority', ticket.priorityCode ?? '-'),
-          _kv('Assigned team', ticket.assignedTeamName ?? 'Grievance Desk'),
-          if (ticket.assignedStaffName != null)
-            _kv('Responsible', ticket.assignedStaffName!),
+          _kv('Handled by', _handlerLine(ticket)),
+          if (ticket.isEscalated && !ticket.isFinal)
+            _kv('Status', 'Escalated for faster action'),
           if ((ticket.locationText ?? '').isNotEmpty)
             _kv('Location', ticket.locationText!),
           _kv('Raised on', _fmt(ticket.createdAt)),

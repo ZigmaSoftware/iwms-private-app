@@ -4,6 +4,7 @@ import 'package:iwms_private_app/data/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
+import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository _authRepository;
@@ -18,8 +19,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthCitizenRegisterRequested>(_onCitizenRegisterRequested);
     on<AuthLogoutRequested>(_onLogoutRequested);
     on<AuthOperatorLoginRequested>(_onOperatorLoginRequested);
+    on<AuthPermissionsRefreshRequested>(_onPermissionsRefreshRequested);
 
     initialization.then((_) => add(AuthStatusChecked()));
+  }
+
+  Future<void> _onPermissionsRefreshRequested(
+    AuthPermissionsRefreshRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final current = state;
+    if (current is! AuthStateAuthenticated) return;
+
+    final refreshed = await _authRepository.refreshCurrentUserPermissions();
+    if (refreshed == null) return;
+
+    // Only rebuild when the grants actually changed. permission_version is a
+    // hash of the resolved permissions, so an unchanged one means every screen
+    // can keep its state instead of being torn down on every resume.
+    final before = current.permissionBundle?.permissionVersion;
+    final after = refreshed.permissionBundle?.permissionVersion;
+    if (before != null && before == after) return;
+
+    emit(_authenticatedStateFromUser(refreshed));
   }
 
   Future<void> _onStatusChecked(
@@ -38,9 +60,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       requireOnline: _authRepository.requiresLiveBackend(user.role),
     );
     if (refreshedUser == null) {
+      await BluetoothService().disconnect();
       await _authRepository.logout();
       emit(const AuthStateUnauthenticated());
       return;
+    }
+
+    if (UserModel.normalizeRole(refreshedUser.role) == 'citizen' ||
+        UserModel.normalizeRole(refreshedUser.role) == 'customer') {
+      await BluetoothService().disconnect();
     }
 
     emit(_authenticatedStateFromUser(refreshedUser));
@@ -82,6 +110,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         password: event.password,
       );
 
+      await BluetoothService().disconnect();
       emit(_authenticatedStateFromUser(user));
     } catch (e) {
       emit(AuthStateFailure(message: e.toString()));
@@ -144,6 +173,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    await BluetoothService().disconnect();
     await _authRepository.logout();
     emit(const AuthStateUnauthenticated());
   }

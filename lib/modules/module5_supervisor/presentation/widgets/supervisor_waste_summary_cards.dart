@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/core/env.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_models.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repository.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_waste_vehicle_sheet.dart';
 
@@ -34,10 +36,6 @@ class _SupervisorWasteSummaryCardsState
   /// supervisor reads at a glance, and everything else is long-tail detail.
   bool _othersExpanded = false;
 
-  /// Tapping the Total card reveals every waste type collected in the window,
-  /// bin and household alike — the full breakdown behind the headline number.
-  bool _totalExpanded = false;
-
   static const double _placeholderTargetKg = 10000;
 
   @override
@@ -53,7 +51,11 @@ class _SupervisorWasteSummaryCardsState
     });
 
     try {
-      final data = await _repo.fetchWasteEvents();
+      final (start, exclusiveEnd) = _window();
+      final data = await _repo.fetchWasteEvents(
+        from: start,
+        to: exclusiveEnd.subtract(const Duration(days: 1)),
+      );
 
       if (!mounted) return;
 
@@ -211,11 +213,16 @@ class _SupervisorWasteSummaryCardsState
       _range = _WasteRange.custom;
       _anchorDate = picked.end;
     });
+    _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final events = _eventsInWindow();
+    final state = context.watch<SupervisorBloc>().state;
+    final events = _withAssignmentFallback(
+      apiEvents: _eventsInWindow(),
+      assignments: state.assignments,
+    );
 
     final totalKg = events.fold<double>(0, (sum, e) => sum + e.weightKg);
     final wetKg = events
@@ -293,10 +300,9 @@ class _SupervisorWasteSummaryCardsState
           _totalCard(
             totalKg,
             targetPct,
+            allRows,
+            events,
           ),
-          // Full per-type breakdown behind the headline number, revealed by
-          // tapping the Total card above.
-          _totalBreakdown(rows: allRows, totalKg: totalKg, events: events),
           const SizedBox(height: 10),
           // Collection-STREAM split (where the waste came from), sitting above
           // the waste-TYPE split below so the two rows read as one grid.
@@ -406,6 +412,60 @@ class _SupervisorWasteSummaryCardsState
         ],
       ],
     );
+  }
+
+  List<SupervisorWasteEvent> _withAssignmentFallback({
+    required List<SupervisorWasteEvent> apiEvents,
+    required List<SupervisorAssignment> assignments,
+  }) {
+    final (start, end) = _window();
+    final events = [...apiEvents];
+
+    double apiKgFor(String assignmentId) => apiEvents
+        .where((event) => event.tripAssignmentId == assignmentId)
+        .fold<double>(0, (sum, event) => sum + event.weightKg);
+
+    for (final assignment in assignments) {
+      final date = assignment.tripDate;
+      if (date == null || date.isBefore(start) || !date.isBefore(end)) {
+        continue;
+      }
+
+      final assignmentKg = assignment.totalCollectedWeightKg;
+      if (assignmentKg <= 0) continue;
+
+      final alreadyCounted = apiKgFor(assignment.uniqueId);
+      final missingKg = assignmentKg - alreadyCounted;
+      if (missingKg <= 0.01) continue;
+
+      SupervisorStop? collectedStop;
+      for (final stop in assignment.stops) {
+        if (stop.isCollected && (stop.collectedWeightKg ?? 0) > 0) {
+          collectedStop = stop;
+          break;
+        }
+      }
+
+      final wasteType = assignment.wasteTypeName.trim().isNotEmpty
+          ? assignment.wasteTypeName.trim()
+          : 'Collected Waste';
+      events.add(
+        SupervisorWasteEvent(
+          date: collectedStop?.collectedAt ?? date,
+          weightKg: missingKg,
+          wasteTypeName: wasteType,
+          source: collectedStop?.isHousehold == true
+              ? SupervisorWasteSource.household
+              : SupervisorWasteSource.bin,
+          vehicleNo: assignment.vehicleNo.isEmpty ? null : assignment.vehicleNo,
+          collectionPointName: collectedStop?.name ?? assignment.areaName,
+          tripAssignmentId: assignment.uniqueId,
+          status: 'Collected',
+        ),
+      );
+    }
+
+    return events;
   }
 
   /// Collapsible summary of every non-Wet/Dry stream.
@@ -756,6 +816,7 @@ class _SupervisorWasteSummaryCardsState
             _range = range;
             _anchorDate = DateTime.now();
           });
+          _load();
         },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -782,6 +843,8 @@ class _SupervisorWasteSummaryCardsState
   Widget _totalCard(
     double totalKg,
     double targetPct,
+    List<MapEntry<String, double>> rows,
+    List<SupervisorWasteEvent> events,
   ) {
     // Matches the empty background colour inside total_waste.png.
     const cardBackground = Color(0xFFEBF0FE);
@@ -791,7 +854,11 @@ class _SupervisorWasteSummaryCardsState
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => setState(() => _totalExpanded = !_totalExpanded),
+        onTap: () => _showTotalBreakdownSheet(
+          rows: rows,
+          totalKg: totalKg,
+          events: events,
+        ),
         child: Container(
           height: 112,
           clipBehavior: Clip.antiAlias,
@@ -880,21 +947,6 @@ class _SupervisorWasteSummaryCardsState
                     top: 21,
                     child: _targetRing(targetPct),
                   ),
-                  // Disclosure affordance for the per-type breakdown — a bare
-                  // chevron, no label: the whole card is the tap target.
-                  Positioned(
-                    left: 15,
-                    bottom: 8,
-                    child: AnimatedRotation(
-                      turns: _totalExpanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 180),
-                      child: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 18,
-                        color: SupervisorTheme.info,
-                      ),
-                    ),
-                  ),
                 ],
               );
             },
@@ -904,76 +956,127 @@ class _SupervisorWasteSummaryCardsState
     );
   }
 
-  /// Per-waste-type breakdown revealed by tapping the Total card.
-  ///
-  /// Covers BOTH streams, so the rows always add up to the headline total —
-  /// bin-side types come through dynamically from the API, household-side
-  /// ones from its fixed wet/dry/mixed/sanitary buckets.
-  Widget _totalBreakdown({
+  Future<void> _showTotalBreakdownSheet({
     required List<MapEntry<String, double>> rows,
     required double totalKg,
     required List<SupervisorWasteEvent> events,
   }) {
     const accent = SupervisorTheme.info;
 
-    return AnimatedCrossFade(
-      duration: const Duration(milliseconds: 180),
-      crossFadeState:
-          _totalExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-      firstChild: const SizedBox(width: double.infinity),
-      secondChild: Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: SupervisorTheme.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: SupervisorTheme.hairline.withValues(alpha: 0.5),
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final maxHeight = MediaQuery.of(sheetContext).size.height * 0.82;
+        return SafeArea(
+          top: false,
+          child: Container(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            decoration: const BoxDecoration(
+              color: SupervisorTheme.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            boxShadow: SupervisorTheme.softShadow,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(12, 12, 12, 2),
-                child: Text(
-                  'Collected by waste type',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1,
-                    fontWeight: FontWeight.w800,
-                    color: accent,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: SupervisorTheme.hairline,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-              ),
-              if (rows.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(12, 12, 12, 14),
-                  child: Text(
-                    'Nothing collected in this period.',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: SupervisorTheme.mutedText,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.inventory_2_outlined,
+                          color: accent,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'All waste types',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: SupervisorTheme.strongText,
+                              ),
+                            ),
+                            Text(
+                              'Total ${_fmt(totalKg)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: SupervisorTheme.mutedText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: SupervisorTheme.mutedText,
+                        ),
+                      ),
+                    ],
                   ),
-                )
-              else
-                for (final row in rows)
-                  _otherRow(
-                    label: row.key,
-                    valueKg: row.value,
-                    totalKg: totalKg,
-                    accent: accent,
-                    events: events,
-                    matches: (e) => e.displayTypeName == row.key,
-                  ),
-            ],
+                ),
+                const Divider(height: 1, color: SupervisorTheme.hairline),
+                Expanded(
+                  child: rows.isEmpty
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: Text(
+                              'Nothing collected in this period.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: SupervisorTheme.mutedText,
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          children: [
+                            for (final row in rows)
+                              _otherRow(
+                                label: row.key,
+                                valueKg: row.value,
+                                totalKg: totalKg,
+                                accent: accent,
+                                events: events,
+                                matches: (e) => e.displayTypeName == row.key,
+                              ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

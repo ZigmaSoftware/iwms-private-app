@@ -1,6 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
@@ -8,6 +10,8 @@ import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
 import 'package:iwms_private_app/data/repositories/trip_delay_repository.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
+import 'package:iwms_private_app/shared/services/collection_photo_proof_service.dart';
+import 'package:iwms_private_app/shared/widgets/collection_photo_permission_dialog.dart';
 
 /// "Report delay" — for everything that slows a trip down WITHOUT taking the
 /// vehicle out of service: a puncture, a minor repair, a blocked road.
@@ -38,6 +42,9 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
   final OperatorTripRepository _tripRepo = getIt<OperatorTripRepository>();
   final TextEditingController _remarksCtrl = TextEditingController();
   final TextEditingController _minutesCtrl = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  final CollectionPhotoProofService _proofService =
+      const CollectionPhotoProofService();
 
   bool _loading = true;
   bool _submitting = false;
@@ -47,6 +54,8 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
   List<OperatorTripToday> _trips = const [];
   String? _assignmentId;
   String? _reason;
+  CollectionPhotoProof? _proof;
+  bool _capturingProof = false;
 
   @override
   void initState() {
@@ -70,8 +79,8 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
       final trips = await _tripRepo.fetchMyTripsToday();
       if (!mounted) return;
       setState(() {
-        // Only trips still running can be delayed — a closed one is history.
-        _trips = trips.where((t) => !t.isClosed).toList();
+        // Only live trips can be delayed — completed / cancelled are history.
+        _trips = trips.where((t) => t.isLive).toList();
         // One trip is the overwhelmingly common case; pre-select it so the
         // driver never taps a picker with a single option in it.
         _assignmentId =
@@ -87,14 +96,51 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
     }
   }
 
-  Future<Position?> _currentLocation() async {
+  Future<void> _captureProof() async {
+    final assignmentId = _assignmentId;
+    final reason = _reason;
+    if (assignmentId == null || reason == null) {
+      setState(() => _error = 'Select the trip and delay reason first.');
+      return;
+    }
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    setState(() {
+      _capturingProof = true;
+      _error = null;
+    });
     try {
-      return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      ).timeout(const Duration(seconds: 4));
+      await _proofService.ensureCaptureReady();
+      final captured = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 88,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+      if (captured == null) return;
+      final reasonLabel = TripDelayRepository.reasons
+          .firstWhere((item) => item.code == reason)
+          .label;
+      final trip = _trips.firstWhere(
+        (item) => item.assignmentUniqueId == assignmentId,
+      );
+      final proof = await _proofService.stamp(
+        source: File(captured.path),
+        wasteType: 'TRIP DELAY - $reasonLabel',
+        stopLabel: trip.ward?.name ?? trip.panchayat?.name ?? 'Active trip',
+        assignmentId: assignmentId,
+      );
+      if (mounted) setState(() => _proof = proof);
+    } on CollectionPhotoProofException catch (e) {
+      if (mounted) await handleCollectionPhotoProofFailure(context, e);
     } catch (_) {
-      // Best-effort: a delay must be reportable with GPS off.
-      return null;
+      if (mounted) {
+        setState(
+            () => _error = 'Could not prepare the photo. Please retake it.');
+      }
+    } finally {
+      if (mounted) setState(() => _capturingProof = false);
     }
   }
 
@@ -115,21 +161,26 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
       setState(() => _error = 'Describe what happened.');
       return;
     }
+    final proof = _proof;
+    if (proof == null) {
+      setState(() => _error = 'Capture a geotagged delay photo to continue.');
+      return;
+    }
 
     setState(() {
       _submitting = true;
       _error = null;
     });
 
-    final location = await _currentLocation();
     try {
       await _delayRepo.reportDelay(
         assignmentId: assignmentId,
         reason: reason,
         remarks: remarks,
+        evidenceImage: proof.file,
         estimatedMinutes: int.tryParse(_minutesCtrl.text.trim()),
-        latitude: location?.latitude,
-        longitude: location?.longitude,
+        latitude: proof.latitude,
+        longitude: proof.longitude,
       );
       if (!mounted) return;
       HapticFeedback.mediumImpact();
@@ -230,6 +281,10 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
                       _label('Delay (minutes, optional)'),
                       const SizedBox(height: 6),
                       _minutesField(),
+                      const SizedBox(height: 14),
+                      _label('Geotagged photo'),
+                      const SizedBox(height: 6),
+                      _proofCapture(),
                       if (_error != null) ...[
                         const SizedBox(height: 12),
                         _banner(_error!, CaptainTheme.danger),
@@ -333,7 +388,10 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
           ],
           onChanged: _submitting
               ? null
-              : (value) => setState(() => _assignmentId = value),
+              : (value) => setState(() {
+                    _assignmentId = value;
+                    _proof = null;
+                  }),
         ),
       ),
     );
@@ -350,7 +408,10 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
             selected: _reason == reason.code,
             onSelected: _submitting
                 ? null
-                : (_) => setState(() => _reason = reason.code),
+                : (_) => setState(() {
+                      _reason = reason.code;
+                      _proof = null;
+                    }),
             labelStyle: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
@@ -416,6 +477,70 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: CaptainTheme.hairline),
         ),
+      ),
+    );
+  }
+
+  Widget _proofCapture() {
+    final proof = _proof;
+    return InkWell(
+      onTap: (_submitting || _capturingProof) ? null : _captureProof,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: proof == null ? 74 : 118,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: CaptainTheme.surfaceMuted,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: CaptainTheme.hairline),
+        ),
+        child: _capturingProof
+            ? const Center(child: CircularProgressIndicator())
+            : proof == null
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.photo_camera_rounded,
+                          color: CaptainTheme.warning),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Capture required photo',
+                        style: TextStyle(
+                          color: CaptainTheme.strongText,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  )
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(proof.file, fit: BoxFit.cover),
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.72),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              'Retake',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
       ),
     );
   }

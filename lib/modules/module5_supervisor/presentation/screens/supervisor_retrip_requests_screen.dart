@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:iwms_private_app/data/models/trip_retrip_models.dart';
@@ -32,11 +34,21 @@ class _SupervisorRetripRequestsScreenState
   bool _loading = true;
   String? _error;
   List<TripRetripRequest> _requests = const [];
+  Timer? _deadlineTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _deadlineTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _deadlineTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -119,6 +131,8 @@ class _RetripCard extends StatelessWidget {
         return SupervisorTheme.success;
       case 'REJECTED':
         return SupervisorTheme.danger;
+      case 'EXPIRED':
+        return SupervisorTheme.mutedText;
       default:
         return SupervisorTheme.warning;
     }
@@ -191,6 +205,19 @@ class _RetripCard extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 12.5, color: SupervisorTheme.mutedText),
               ),
+              if (request.expiryLabel().isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Text(
+                  request.expiryLabel(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: request.isExpired || request.isLocallyExpired
+                        ? SupervisorTheme.danger
+                        : SupervisorTheme.warning,
+                  ),
+                ),
+              ],
               if (request.requestedByName.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(

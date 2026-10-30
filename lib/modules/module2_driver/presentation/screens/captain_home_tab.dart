@@ -40,6 +40,7 @@ class CaptainHomeTab extends StatefulWidget {
     this.onOpenTrips,
     this.driverName,
     this.closedTripCount = 0,
+    this.serviceNotices = const [],
   });
 
   /// The driver's OPEN trips today — closed (Completed / Re-Trip-closed)
@@ -53,6 +54,7 @@ class CaptainHomeTab extends StatefulWidget {
   /// driver has FINISHED their day, which is a very different message from
   /// "nothing has been assigned to you".
   final int closedTripCount;
+  final List<OperatorServiceNotice> serviceNotices;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
@@ -257,6 +259,18 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
       // Closed trips are filtered out before they reach here, so an empty list
       // means one of two very different things — don't tell a driver who just
       // finished every trip that nothing was ever assigned to them.
+      if (widget.serviceNotices.isNotEmpty) {
+        final notice = widget.serviceNotices.first;
+        return _MessageView(
+          icon: Icons.event_busy_outlined,
+          iconColor: CaptainTheme.danger,
+          title: 'No collection today',
+          message:
+              '${notice.planCode}: collection is suspended due to ${notice.explanation.toLowerCase()}. You do not need to begin this route.',
+          actionLabel: 'Refresh',
+          onAction: widget.onRefresh,
+        );
+      }
       final allDone = widget.closedTripCount > 0;
       return _MessageView(
         imageAsset: 'assets/images/no_assignments.png',
@@ -265,11 +279,8 @@ class _CaptainHomeTabState extends State<CaptainHomeTab> {
             ? 'You have finished every trip assigned to you today. '
                 'Completed trips are in Trip History.'
             : 'No trip has been assigned to this vehicle yet. Pull to refresh or check with your supervisor.',
-        actionLabel: allDone ? 'View history' : 'Refresh',
-        onAction: allDone && widget.onOpenTrips != null
-            // onAction is async; onOpenTrips is a plain VoidCallback.
-            ? () async => widget.onOpenTrips!()
-            : widget.onRefresh,
+        actionLabel: 'Refresh',
+        onAction: widget.onRefresh,
       );
     }
 
@@ -1241,16 +1252,58 @@ class _TripHeroCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          trip.areaName,
-                          maxLines: veryNarrow ? 2 : 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: veryNarrow ? 15 : 16.5,
-                            fontWeight: FontWeight.w800,
-                            color: CaptainTheme.strongText,
-                            height: 1.05,
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Zone: ',
+                                style: TextStyle(
+                                  fontSize: veryNarrow ? 12.5 : 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: CaptainTheme.mutedText,
+                                  height: 1.05,
+                                ),
+                              ),
+                              TextSpan(
+                                text: trip.effectiveZoneName,
+                                style: TextStyle(
+                                  fontSize: veryNarrow ? 15 : 16.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: CaptainTheme.strongText,
+                                  height: 1.05,
+                                ),
+                              ),
+                            ],
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 10),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'Ward: ',
+                                style: TextStyle(
+                                  fontSize: veryNarrow ? 12.5 : 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: CaptainTheme.mutedText,
+                                  height: 1.05,
+                                ),
+                              ),
+                              TextSpan(
+                                text: trip.areaName,
+                                style: TextStyle(
+                                  fontSize: veryNarrow ? 15 : 16.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: CaptainTheme.strongText,
+                                  height: 1.05,
+                                ),
+                              ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 14),
                         Wrap(
@@ -2075,8 +2128,14 @@ class _HouseholdTimelineState extends State<_HouseholdTimeline> {
   }
 
   Widget _buildTimeline(BuildContext context) {
+    // A customer who tapped "I'm home now" goes to the top (and so becomes
+    // the next stop); everything else keeps route sequence.
     final stops = [...widget.trip.householdCollections, ..._extra]
-      ..sort((a, b) => a.sequence.compareTo(b.sequence));
+      ..sort((a, b) {
+        final waiting =
+            (b.customerWaiting ? 1 : 0).compareTo(a.customerWaiting ? 1 : 0);
+        return waiting != 0 ? waiting : a.sequence.compareTo(b.sequence);
+      });
     if (stops.isEmpty) {
       return CaptainGlassCard(
         child: Column(
@@ -2280,6 +2339,10 @@ class _HouseholdTile extends StatelessWidget {
                                   : statusColor,
                             ),
                           ),
+                          if (stop.customerWaiting) ...[
+                            const SizedBox(height: 6),
+                            _CustomerHomeBadge(stop: stop),
+                          ],
                         ],
                       ),
                     ),
@@ -2321,7 +2384,8 @@ class _HouseholdTile extends StatelessWidget {
 
   void _showBreakdown(BuildContext context) {
     final rows = stop.wasteBreakdown
-        .map((e) => WasteBreakdownRow(wasteType: e.wasteType, weightKg: e.weightKg))
+        .map((e) =>
+            WasteBreakdownRow(wasteType: e.wasteType, weightKg: e.weightKg))
         .toList();
     // A legacy collection with no per-type split recorded still has the
     // combined total — fall back to a single "Waste Collected" row rather
@@ -2337,6 +2401,7 @@ class _HouseholdTile extends StatelessWidget {
       title: stop.customerName,
       subtitle: stop.address ?? 'Household ${stop.sequence}',
       rows: rows,
+      imageUrl: stop.collectionImageUrl,
     );
   }
 
@@ -2507,6 +2572,48 @@ class _MessageView extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Customer home now · 10:42" (+ their note) on a household the customer
+/// flagged from the citizen app after it was marked Collect Later.
+class _CustomerHomeBadge extends StatelessWidget {
+  const _CustomerHomeBadge({required this.stop});
+
+  final OperatorTripHouseholdStop stop;
+
+  @override
+  Widget build(BuildContext context) {
+    final at = stop.customerAvailableAt;
+    final note = (stop.customerAvailableNote ?? '').trim();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: CaptainTheme.success.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.how_to_reg_rounded, size: 14, color: CaptainTheme.success),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              'Customer home now'
+              '${at == null ? '' : ' · ${TimeOfDay.fromDateTime(at.toLocal()).format(context)}'}'
+              '${note.isEmpty ? '' : ' · "$note"'}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: CaptainTheme.success,
               ),
             ),
           ),

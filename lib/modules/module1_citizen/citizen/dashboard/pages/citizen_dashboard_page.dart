@@ -51,8 +51,13 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     with TickerProviderStateMixin {
   late final BannerController _bannerController;
   late final TrackController _trackController;
+
+  /// The home summary card's own copy, always today's waste. Kept separate
+  /// so the period/date filters on the Track tab never change the home card.
+  late final TrackController _homeSummaryController;
   late final NotificationController _notificationController;
   late final HomeNavController _navController;
+  final ValueNotifier<int> _pickupRefresh = ValueNotifier<int>(0);
   late final GeofenceEvaluator _geofenceEvaluator;
   late final AuthRepository _authRepository;
   bool _wasVehicleInsideGeofence = false;
@@ -73,6 +78,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       fallbackSlides: _fallbackSlides,
     );
     _trackController = TrackController(TrackService());
+    _homeSummaryController = TrackController(TrackService());
     _notificationController = getIt<NotificationController>();
     _navController = HomeNavController();
     _geofenceEvaluator = const GeofenceEvaluator();
@@ -80,6 +86,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
 
     unawaited(_bannerController.initialize());
     unawaited(_trackController.refresh(force: true));
+    unawaited(_homeSummaryController.refresh(force: true));
     _loadUserId();
   }
 
@@ -91,10 +98,8 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     });
     if (user?.userId != null && user!.userId.trim().isNotEmpty) {
       unawaited(_fetchCitizenAssignments(user.userId.trim()));
-      // Instant collection-status push notifications. Safe no-op until
-      // Firebase is configured — see push_notification_service.dart.
-      unawaited(PushNotificationService.instance.initAndRegister());
     }
+    unawaited(PushNotificationService.instance.initAndRegister());
   }
 
   Future<void> _fetchCitizenAssignments(String customerId) async {
@@ -117,7 +122,9 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       final decoded = response.data;
       final List list = decoded is List
           ? decoded
-          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+          : (decoded is Map
+              ? (decoded['results'] ?? decoded['data'] ?? [])
+              : []);
 
       for (final item in list) {
         if (item is! Map) continue;
@@ -142,8 +149,10 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
 
   @override
   void dispose() {
+    _pickupRefresh.dispose();
     _bannerController.dispose();
     _trackController.dispose();
+    _homeSummaryController.dispose();
     _navController.dispose();
     super.dispose();
   }
@@ -155,8 +164,8 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     final isDarkMode = theme.brightness == Brightness.dark;
 
     final normalizedName = widget.userName.trim();
-    final showUserName =
-        normalizedName.isNotEmpty && normalizedName.toLowerCase() != 'citizen demo';
+    final showUserName = normalizedName.isNotEmpty &&
+        normalizedName.toLowerCase() != 'citizen demo';
 
     final backgroundColor = isDarkMode
         ? CitizenDashboardPage.darkBackground
@@ -167,8 +176,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
         ? Colors.white.withValues(alpha: 0.08)
         : Colors.black.withValues(alpha: 0.05);
     final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final secondaryTextColor =
-        isDarkMode ? Colors.white70 : Colors.black54;
+    final secondaryTextColor = isDarkMode ? Colors.white70 : Colors.black54;
     final highlightColor =
         isDarkMode ? colorScheme.secondary : colorScheme.primary;
 
@@ -181,7 +189,8 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       localizations.tabProfile,
     ];
     final localeCode = Localizations.localeOf(context).languageCode;
-    final navTextStyle = (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+    final navTextStyle =
+        (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
       color: isDarkMode ? Colors.white70 : Colors.black87,
       fontWeight: FontWeight.w600,
       fontSize: localeCode == 'ta' ? 11 : 12,
@@ -201,6 +210,15 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
             controller: _trackController,
             highlightColor: highlightColor,
             textColor: textColor,
+            surfaceColor: surfaceColor,
+            outlineColor: outlineColor,
+            isDarkMode: isDarkMode,
+            secondaryTextColor: secondaryTextColor,
+            pickupRefresh: _pickupRefresh,
+            onRefresh: () async {
+              _pickupRefresh.value++;
+              await _trackController.refresh(force: true);
+            },
             onPickDate: () async {
               final now = DateTime.now();
               final picked = await showDatePicker(
@@ -215,7 +233,9 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
             },
           );
         case BottomNavItem.map:
-          return const MapTabPage();
+          return MapTabPage(
+            onBack: () => _navController.setItem(BottomNavItem.home),
+          );
         case BottomNavItem.profile:
           return ProfileTab(
             headerHeight: headerHeight,
@@ -228,7 +248,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
         case BottomNavItem.home:
           return HomeTab(
             bannerController: _bannerController,
-            trackController: _trackController,
+            trackController: _homeSummaryController,
             notificationController: _notificationController,
             quickActions: quickActions,
             userName: normalizedName,
@@ -240,9 +260,17 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
             secondaryTextColor: secondaryTextColor,
             highlightColor: highlightColor,
             onStatsTap: () {
-              _trackController.setPeriod(WastePeriod.monthly);
+              _trackController.setPeriod(WastePeriod.daily);
               _navController.setItem(BottomNavItem.track);
               unawaited(_trackController.refresh(force: true));
+            },
+            pickupRefresh: _pickupRefresh,
+            onRefresh: () async {
+              _pickupRefresh.value++;
+              await Future.wait([
+                _homeSummaryController.refresh(force: true),
+                _bannerController.refresh(),
+              ]);
             },
           );
       }
@@ -403,8 +431,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     _notificationController.addAlert(
       CitizenAlert(
         title: 'Truck approaching',
-        message:
-            'Your pickup truck is nearby. Please keep waste segregated.',
+        message: 'Your pickup truck is nearby. Please keep waste segregated.',
         timestamp: now,
       ),
     );
@@ -421,9 +448,8 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
   ) async {
     final theme = Theme.of(context);
     final uid = _userId;
-    final qrPayload = uid != null
-        ? jsonEncode({"type": "citizen", "uid": uid})
-        : null;
+    final qrPayload =
+        uid != null ? jsonEncode({"type": "citizen", "uid": uid}) : null;
 
     await showDialog<void>(
       context: context,
