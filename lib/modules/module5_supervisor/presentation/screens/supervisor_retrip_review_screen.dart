@@ -10,9 +10,9 @@ import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/s
 /// Full-screen approve/reject decision flow for one Re-Trip request. Ported
 /// from the government app's identically-purposed
 /// `SupervisorRetripReviewScreen` (`module5_supervisor/presentation/screens/
-/// supervisor_retrip_review_screen.dart`) — a bin trip lets the supervisor
-/// tick which pending stops carry over to the continuation trip. Every
-/// pending stop starts selected; the supervisor unticks anything to drop.
+/// supervisor_retrip_review_screen.dart`) — the supervisor ticks which
+/// pending stops (bins and households) carry over to the continuation trip.
+/// Every pending stop starts selected; anything unticked is marked Missed.
 class SupervisorRetripReviewScreen extends StatefulWidget {
   const SupervisorRetripReviewScreen({super.key, required this.request});
 
@@ -166,8 +166,8 @@ class _SupervisorRetripReviewScreenState
       builder: (dialogContext) => AlertDialog(
         title: const Text('Carry nothing over?'),
         content: const Text(
-          'No collection points are selected, so the trip will be closed '
-          'and the remaining stops dropped for today. Continue?',
+          'No stops are selected, so the trip will be closed and every '
+          'remaining stop marked Missed for today. Continue?',
         ),
         actions: [
           TextButton(
@@ -281,7 +281,12 @@ class _SupervisorRetripReviewScreenState
     final r = _request;
     final rows = <MapEntry<String, String>>[
       MapEntry('Trip', r.assignmentUniqueId),
-      MapEntry('Area', r.areaName.isEmpty ? '—' : r.areaName),
+      MapEntry(
+        'Area',
+        r.locationLabel.isNotEmpty
+            ? r.locationLabel
+            : (r.areaName.isEmpty ? '—' : r.areaName),
+      ),
       if (r.vehicleNo.isNotEmpty) MapEntry('Vehicle', r.vehicleNo),
       if (r.requestedByName.isNotEmpty)
         MapEntry('Requested by', r.requestedByName),
@@ -344,9 +349,14 @@ class _SupervisorRetripReviewScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Driver's reason",
-                    style: TextStyle(
+                  Text(
+                    // A listed category's text already starts with its
+                    // label ("Vehicle full: …"); only "Other" needs it here.
+                    r.reasonCodeLabel.isNotEmpty &&
+                            !r.reason.startsWith(r.reasonCodeLabel)
+                        ? "Driver's reason · ${r.reasonCodeLabel}"
+                        : "Driver's reason",
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                       color: SupervisorTheme.warning,
@@ -396,10 +406,10 @@ class _SupervisorRetripReviewScreenState
       );
     }
     final total = r.liveStops.length;
-    final noun = r.isHousehold ? 'household(s)' : 'collection point(s)';
-    final message = '${_selected.length} of $total $noun will move to a '
-        'new trip. Unticked stops are dropped for today, and this trip '
-        'is closed.';
+    final unticked = total - _selected.length;
+    final message = '${_selected.length} of $total stop(s) will move to a '
+        'new trip and this trip is closed. '
+        '${unticked > 0 ? '$unticked unticked stop(s) will be marked Missed for today.' : 'Untick a stop to mark it Missed instead.'}';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -431,8 +441,12 @@ class _SupervisorRetripReviewScreenState
   Widget _stopsHeader() {
     final r = _request;
     final total = r.liveStops.length;
-    final title =
-        r.isHousehold ? 'Select households' : 'Select collection points';
+    final title = r.livePendingBins.isNotEmpty &&
+            r.livePendingHouseholds.isNotEmpty
+        ? 'Select stops'
+        : (r.livePendingHouseholds.isNotEmpty
+            ? 'Select households'
+            : 'Select collection points');
     return Row(
       children: [
         Expanded(
@@ -455,10 +469,34 @@ class _SupervisorRetripReviewScreenState
   }
 
   Widget _stopsList() {
-    final stops = _request.liveStops;
-    if (stops.isEmpty) return _emptyStops();
+    final r = _request;
+    if (r.liveStops.isEmpty) return _emptyStops();
+    final mixed =
+        r.livePendingBins.isNotEmpty && r.livePendingHouseholds.isNotEmpty;
     return Column(
-      children: [for (final stop in stops) _stopRow(stop)],
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (mixed) _stopsSectionLabel('Collection points'),
+        for (final stop in r.livePendingBins)
+          _stopRow(stop, isHousehold: false),
+        if (mixed) _stopsSectionLabel('Households'),
+        for (final stop in r.livePendingHouseholds)
+          _stopRow(stop, isHousehold: true),
+      ],
+    );
+  }
+
+  Widget _stopsSectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 10, 4, 2),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          color: SupervisorTheme.mutedText,
+        ),
+      ),
     );
   }
 
@@ -490,8 +528,7 @@ class _SupervisorRetripReviewScreenState
     );
   }
 
-  Widget _stopRow(RetripPendingStop stop) {
-    final isHousehold = _request.isHousehold;
+  Widget _stopRow(RetripPendingStop stop, {required bool isHousehold}) {
     final statusLabel = stop.status.isNotEmpty ? stop.status : 'Pending';
     final selected = _selected.contains(stop.uniqueId);
     return InkWell(

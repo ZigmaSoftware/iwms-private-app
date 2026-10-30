@@ -304,6 +304,7 @@ class OperatorTripRepository {
   Future<OperatorTripEndResult> endTrip(
     String assignmentId, {
     String? reason,
+    String? reasonCode,
   }) async {
     final dio = await authorizedDio();
     try {
@@ -311,6 +312,8 @@ class OperatorTripRepository {
         ApiConfig.operatorTripEnd(assignmentId),
         data: {
           if (reason != null && reason.isNotEmpty) 'reason': reason,
+          if (reasonCode != null && reasonCode.isNotEmpty)
+            'reason_code': reasonCode,
         },
       );
       return OperatorTripEndResult.fromJson(
@@ -325,6 +328,8 @@ class OperatorTripRepository {
           pendingBinCount: (data['pending_bin_count'] as num?)?.toInt() ?? 0,
           pendingHouseholdCount:
               (data['pending_household_count'] as num?)?.toInt() ?? 0,
+          message: data['detail']?.toString(),
+          reasonCodes: RetripReasonCode.listFromJson(data['reason_codes']),
         );
       }
       _throwDio(e);

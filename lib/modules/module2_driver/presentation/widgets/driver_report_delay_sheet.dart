@@ -79,8 +79,8 @@ class _DriverReportDelaySheetState extends State<DriverReportDelaySheet> {
       final trips = await _tripRepo.fetchMyTripsToday();
       if (!mounted) return;
       setState(() {
-        // Only trips still running can be delayed — a closed one is history.
-        _trips = trips.where((t) => !t.isClosed).toList();
+        // Only live trips can be delayed — completed / cancelled are history.
+        _trips = trips.where((t) => t.isLive).toList();
         // One trip is the overwhelmingly common case; pre-select it so the
         // driver never taps a picker with a single option in it.
         _assignmentId =

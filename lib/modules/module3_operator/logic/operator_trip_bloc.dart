@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:iwms_private_app/core/network/trip_stale_signal.dart';
 import 'package:iwms_private_app/data/models/operator_trip_models.dart';
 import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
 
@@ -67,6 +70,16 @@ class OperatorTripBloc extends Bloc<OperatorTripEvent, OperatorTripState> {
     on<OperatorTripLoadRequested>(_onLoad);
     on<OperatorTripRefreshRequested>(_onLoad);
     on<OperatorTripBinScanFinalized>(_onBinScanFinalized);
+    _staleTrip = TripStaleSignal.events
+        .listen((_) => add(const OperatorTripRefreshRequested()));
+  }
+
+  late final StreamSubscription<String> _staleTrip;
+
+  @override
+  Future<void> close() {
+    _staleTrip.cancel();
+    return super.close();
   }
 
   Future<void> _onLoad(

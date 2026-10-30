@@ -88,6 +88,70 @@ class _SupervisorBreakdownsScreenState
     }
   }
 
+  Future<void> _markRepaired(VehicleBreakdownReport r) async {
+    final remarks = await _promptRepairRemarks(r);
+    if (remarks == null) return;
+    setState(() => _busyIds.add(r.uniqueId));
+    try {
+      await _repo.markRepaired(r.uniqueId, repairRemarks: remarks);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Vehicle marked repaired — back in service.')));
+      setState(() => _busyIds.remove(r.uniqueId));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+      setState(() => _busyIds.remove(r.uniqueId));
+    }
+  }
+
+  /// Returns the (possibly empty) repair remarks, or null if cancelled.
+  Future<String?> _promptRepairRemarks(VehicleBreakdownReport r) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mark vehicle repaired'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${r.breakdownVehicleNo.isEmpty ? 'The vehicle' : r.breakdownVehicleNo} '
+              'goes back to active and its trips can start again.',
+              style: const TextStyle(
+                  fontSize: 13, color: SupervisorTheme.mutedText),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              style: SupervisorTheme.inputTextStyle,
+              decoration:
+                  SupervisorTheme.inputDecoration('Repair remarks (optional)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: SupervisorTheme.success,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Mark repaired'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<String?> _promptRejectionRemarks() async {
     final controller = TextEditingController();
     return showDialog<String>(
@@ -160,6 +224,7 @@ class _SupervisorBreakdownsScreenState
           busy: _busyIds.contains(_reports[i].uniqueId),
           onArrangeReplacement: () => _openReplacementPlan(_reports[i]),
           onReject: () => _reject(_reports[i]),
+          onMarkRepaired: () => _markRepaired(_reports[i]),
         ),
       ),
     );
@@ -172,12 +237,14 @@ class _BreakdownCard extends StatelessWidget {
     required this.busy,
     required this.onArrangeReplacement,
     required this.onReject,
+    required this.onMarkRepaired,
   });
 
   final VehicleBreakdownReport report;
   final bool busy;
   final VoidCallback onArrangeReplacement;
   final VoidCallback onReject;
+  final VoidCallback onMarkRepaired;
 
   Color get _statusColor {
     switch (report.approvalStatus.toUpperCase()) {
@@ -403,6 +470,51 @@ class _BreakdownCard extends StatelessWidget {
                 ),
               ],
             ),
+          ] else if (report.canMarkRepaired) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Vehicle is out of service until marked repaired.',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: SupervisorTheme.danger,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: busy ? null : onMarkRepaired,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SupervisorTheme.success,
+                  foregroundColor: Colors.white,
+                ),
+                icon: busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.build_circle_outlined, size: 18),
+                label: const Text('Mark repaired'),
+              ),
+            ),
+          ] else if (report.isRepaired) ...[
+            const SizedBox(height: 8),
+            Text(
+              [
+                'Repaired',
+                if (report.repairedByName.isNotEmpty)
+                  'by ${report.repairedByName}',
+                if (report.repairRemarks.isNotEmpty)
+                  '— ${report.repairRemarks}',
+              ].join(' '),
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: SupervisorTheme.success),
+            ),
           ] else if (report.rejectionRemarks.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -430,6 +542,10 @@ class _ReplacementPlanSheet extends StatefulWidget {
 }
 
 class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
+  /// Dropdown value meaning "send no id": the crew carries on unchanged
+  /// (the original crew, or the one the driver picked when reporting).
+  static const String _keepCrew = '';
+
   final _remarksController = TextEditingController();
 
   bool _loadingOptions = true;
@@ -442,8 +558,20 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
   List<VehicleBreakdownOption> _operators = const [];
 
   String? _replacementVehicleId;
-  String? _replacementDriverId;
-  String? _replacementOperatorId;
+  String _replacementDriverId = _keepCrew;
+  String _replacementOperatorId = _keepCrew;
+
+  // Bins carried to the replacement trip; every pending bin starts ticked.
+  late final Set<String> _selectedStops =
+      widget.report.pendingBins.map((s) => s.uniqueId).toSet();
+
+  // What else moves to the chosen replacement — loaded per vehicle.
+  bool _loadingPreview = false;
+  String? _previewError;
+  bool _previewUnavailable = false;
+  BreakdownVerifyPreview? _preview;
+  final Set<String> _moveTripIds = {};
+  final Set<String> _substitutePlanIds = {};
 
   @override
   void initState() {
@@ -493,31 +621,113 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
     }
   }
 
+  Future<void> _selectVehicle(String? id) async {
+    setState(() {
+      _replacementVehicleId = id;
+      _preview = null;
+      _previewError = null;
+      _previewUnavailable = false;
+      _moveTripIds.clear();
+      _substitutePlanIds.clear();
+    });
+    if (id == null) return;
+    setState(() => _loadingPreview = true);
+    try {
+      final preview = await widget.repo.fetchVerifyPreview(
+        widget.report.uniqueId,
+        replacementVehicleId: id,
+      );
+      // A slower answer for a vehicle the supervisor already moved off.
+      if (!mounted || _replacementVehicleId != id) return;
+      setState(() {
+        _preview = preview;
+        _moveTripIds.addAll(preview.upcomingTrips
+            .where((t) => t.defaultMove)
+            .map((t) => t.uniqueId));
+        _substitutePlanIds.addAll(preview.plans
+            .where((p) => p.defaultSubstitute)
+            .map((p) => p.tripPlanId));
+        _loadingPreview = false;
+      });
+    } on VehicleBreakdownPreviewUnavailable {
+      if (!mounted || _replacementVehicleId != id) return;
+      setState(() {
+        _previewUnavailable = true;
+        _loadingPreview = false;
+      });
+    } catch (e) {
+      if (!mounted || _replacementVehicleId != id) return;
+      setState(() {
+        _previewError = e.toString();
+        _loadingPreview = false;
+      });
+    }
+  }
+
   bool get _canSave =>
-      !_saving &&
-      _replacementVehicleId != null &&
-      _replacementDriverId != null &&
-      _replacementOperatorId != null;
+      !_saving && !_loadingPreview && _replacementVehicleId != null;
 
   Future<void> _submit() async {
     if (!_canSave) return;
+    final bins = widget.report.pendingBins;
+    if (bins.isNotEmpty &&
+        _selectedStops.isEmpty &&
+        widget.report.pendingHouseholdCount == 0) {
+      setState(() =>
+          _saveError = 'Select at least one collection point to carry over.');
+      return;
+    }
     setState(() {
       _saving = true;
       _saveError = null;
     });
+    final preview = _preview;
     try {
-      await widget.repo.approve(
+      final skipped = await widget.repo.approve(
         widget.report.uniqueId,
         remarks: _remarksController.text.trim(),
         replacementVehicleId: _replacementVehicleId!,
-        replacementDriverId: _replacementDriverId!,
-        replacementOperatorId: _replacementOperatorId!,
+        replacementDriverId:
+            _replacementDriverId == _keepCrew ? null : _replacementDriverId,
+        replacementOperatorId:
+            _replacementOperatorId == _keepCrew ? null : _replacementOperatorId,
+        // Omitted = every pending bin, so only send a narrowed selection.
+        collectionPointIds: _selectedStops.length == bins.length
+            ? null
+            : _selectedStops.toList(),
+        // Without a preview the supervisor saw no choices: leave both to the
+        // backend defaults rather than sending empty lists.
+        moveAssignmentIds: preview == null ? null : _moveTripIds.toList(),
+        substitutePlanIds: preview == null ? null : _substitutePlanIds.toList(),
       );
       if (!mounted) return;
-      Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Breakdown approved — vehicle replaced.')),
-      );
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      if (skipped.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Approved — some trips were not moved'),
+            content: Text(
+              '${skipped.join('\n')}\n\nThey stay on the broken vehicle. '
+              'Use "Change vehicle" on those trips.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      navigator.pop(true);
+      if (skipped.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+              content: Text('Breakdown approved — vehicle replaced.')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -605,6 +815,33 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
     );
   }
 
+  String get _currentCrewLabel {
+    final r = widget.report;
+    final reported = r.replacementDriverName.isNotEmpty ||
+        r.replacementOperatorName.isNotEmpty;
+    return reported ? 'As reported' : 'Same crew';
+  }
+
+  List<DropdownMenuItem<String>> _crewItems(
+      List<VehicleBreakdownOption> staff, String currentName) {
+    return [
+      DropdownMenuItem(
+        value: _keepCrew,
+        child: Text(
+          currentName.isEmpty
+              ? _currentCrewLabel
+              : '$_currentCrewLabel ($currentName)',
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      for (final s in staff)
+        DropdownMenuItem(
+          value: s.uniqueId,
+          child: Text(s.label, overflow: TextOverflow.ellipsis),
+        ),
+    ];
+  }
+
   Widget _body() {
     if (_loadingOptions) {
       return const Padding(
@@ -636,6 +873,14 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
       );
     }
 
+    final r = widget.report;
+    final driverName = r.replacementDriverName.isNotEmpty
+        ? r.replacementDriverName
+        : r.originalDriverName;
+    final operatorName = r.replacementOperatorName.isNotEmpty
+        ? r.replacementOperatorName
+        : r.originalOperatorName;
+
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
           20, 4, 20, 16 + MediaQuery.viewPaddingOf(context).bottom),
@@ -653,62 +898,42 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
                       child: Text(v.label, overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
-            onChanged: (v) => setState(() => _replacementVehicleId = v),
+            onChanged: _saving ? null : _selectVehicle,
           ),
+          if (_vehicles.isEmpty) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'No vehicle is free today',
+              style: TextStyle(
+                color: SupervisorTheme.danger,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
             value: _replacementDriverId,
             isExpanded: true,
             dropdownColor: SupervisorTheme.surface,
             decoration: _fieldDecoration('Replacement driver'),
-            items: _drivers
-                .map((d) => DropdownMenuItem(
-                      value: d.uniqueId,
-                      child: Text(d.label, overflow: TextOverflow.ellipsis),
-                    ))
-                .toList(),
-            onChanged: _drivers.isEmpty
-                ? null
-                : (v) => setState(() => _replacementDriverId = v),
+            items: _crewItems(_drivers, driverName),
+            onChanged: (v) =>
+                setState(() => _replacementDriverId = v ?? _keepCrew),
           ),
-          if (_drivers.isEmpty) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'No available drivers reporting to you',
-              style: TextStyle(
-                color: SupervisorTheme.danger,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
             value: _replacementOperatorId,
             isExpanded: true,
             dropdownColor: SupervisorTheme.surface,
             decoration: _fieldDecoration('Replacement operator'),
-            items: _operators
-                .map((o) => DropdownMenuItem(
-                      value: o.uniqueId,
-                      child: Text(o.label, overflow: TextOverflow.ellipsis),
-                    ))
-                .toList(),
-            onChanged: _operators.isEmpty
-                ? null
-                : (v) => setState(() => _replacementOperatorId = v),
+            items: _crewItems(_operators, operatorName),
+            onChanged: (v) =>
+                setState(() => _replacementOperatorId = v ?? _keepCrew),
           ),
-          if (_operators.isEmpty) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'No available operators reporting to you',
-              style: TextStyle(
-                color: SupervisorTheme.danger,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+          if (r.pendingBins.isNotEmpty || r.pendingHouseholdCount > 0)
+            ..._stopsSection(),
+          ..._previewSections(),
           const SizedBox(height: 14),
           TextField(
             controller: _remarksController,
@@ -742,5 +967,210 @@ class _ReplacementPlanSheetState extends State<_ReplacementPlanSheet> {
         ],
       ),
     );
+  }
+
+  Widget _sectionTitle(String title, {String? subtitle}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              color: SupervisorTheme.strongText,
+            ),
+          ),
+          if (subtitle != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                subtitle,
+                style: const TextStyle(
+                    fontSize: 12, color: SupervisorTheme.mutedText),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _checkRow({
+    required bool checked,
+    required ValueChanged<bool> onChanged,
+    required String title,
+    String? subtitle,
+    String? warning,
+  }) {
+    return InkWell(
+      onTap: _saving ? null : () => onChanged(!checked),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Checkbox(
+            value: checked,
+            activeColor: SupervisorTheme.accent,
+            onChanged: _saving ? null : (v) => onChanged(v ?? false),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: SupervisorTheme.strongText,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                          fontSize: 12, color: SupervisorTheme.mutedText),
+                    ),
+                  if (warning != null)
+                    Text(
+                      '⚠ $warning',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: SupervisorTheme.warning,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _stopsSection() {
+    final r = widget.report;
+    return [
+      _sectionTitle(
+        'Remaining collection points (${_selectedStops.length}/${r.pendingBins.length})',
+        subtitle: [
+          if (r.pendingBins.isNotEmpty)
+            'Ticked stops move to the replacement trip.',
+          if (r.pendingHouseholdCount > 0)
+            '${r.pendingHouseholdCount} household stop(s) always move.',
+        ].join(' '),
+      ),
+      for (final stop in r.pendingBins)
+        _checkRow(
+          checked: _selectedStops.contains(stop.uniqueId),
+          onChanged: (on) => setState(() => on
+              ? _selectedStops.add(stop.uniqueId)
+              : _selectedStops.remove(stop.uniqueId)),
+          title: stop.name,
+          subtitle: stop.status,
+        ),
+    ];
+  }
+
+  List<Widget> _previewSections() {
+    if (_replacementVehicleId == null) return const [];
+    if (_loadingPreview) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 18),
+          child: Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: SupervisorTheme.accent),
+            ),
+          ),
+        ),
+      ];
+    }
+    if (_previewUnavailable) {
+      return const [
+        SizedBox(height: 14),
+        Text(
+          'Other-trip preview is unavailable on this server. '
+          'You can still approve this replacement. Other trips will stay '
+          'on the broken vehicle; trip plan replacements follow server defaults.',
+          style: TextStyle(fontSize: 12, color: SupervisorTheme.mutedText),
+        ),
+      ];
+    }
+    if (_previewError != null) {
+      return [
+        const SizedBox(height: 14),
+        Text(
+          'Could not load the vehicle\'s other trips: $_previewError\n'
+          'Approving now moves none of them; trip plans use the default.',
+          style: const TextStyle(fontSize: 12, color: SupervisorTheme.danger),
+        ),
+        TextButton(
+          onPressed: () => _selectVehicle(_replacementVehicleId),
+          child: const Text('Retry'),
+        ),
+      ];
+    }
+    final preview = _preview;
+    if (preview == null) return const [];
+    final vehicleNo = widget.report.breakdownVehicleNo.isEmpty
+        ? 'the broken vehicle'
+        : widget.report.breakdownVehicleNo;
+    final replacement = _vehicles
+        .where((v) => v.uniqueId == _replacementVehicleId)
+        .map((v) => v.label)
+        .firstOrNull;
+    return [
+      if (preview.upcomingTrips.isNotEmpty) ...[
+        _sectionTitle(
+          'Other trips of $vehicleNo',
+          subtitle: 'Ticked trips move to the replacement with their own '
+              'crew. Unticked ones stay blocked until moved or repaired.',
+        ),
+        for (final t in preview.upcomingTrips)
+          _checkRow(
+            checked: _moveTripIds.contains(t.uniqueId),
+            onChanged: (on) => setState(() => on
+                ? _moveTripIds.add(t.uniqueId)
+                : _moveTripIds.remove(t.uniqueId)),
+            title:
+                [t.planCode, t.uniqueId].where((s) => s.isNotEmpty).join(' · '),
+            subtitle: [t.tripDate, t.scheduledTime]
+                .where((s) => s.isNotEmpty)
+                .join(' at '),
+            warning: t.replacementBusyTimes.isEmpty
+                ? null
+                : 'Replacement already has ${t.replacementBusyTimes.join(', ')} that day.',
+          ),
+      ],
+      if (preview.plans.isNotEmpty) ...[
+        _sectionTitle(
+          'Use ${replacement ?? 'the replacement'} for upcoming days',
+          subtitle: 'Ticked plans run on it with their own crew from '
+              '${preview.substituteFromDate.isEmpty ? 'tomorrow' : preview.substituteFromDate} '
+              'until $vehicleNo is repaired.',
+        ),
+        for (final p in preview.plans)
+          _checkRow(
+            checked: _substitutePlanIds.contains(p.tripPlanId),
+            onChanged: (on) => setState(() => on
+                ? _substitutePlanIds.add(p.tripPlanId)
+                : _substitutePlanIds.remove(p.tripPlanId)),
+            title: p.displayCode.isEmpty ? p.tripPlanId : p.displayCode,
+            subtitle: [
+              if (p.scheduledTime.isNotEmpty) p.scheduledTime,
+              if (p.days.isNotEmpty) p.days.join(', '),
+            ].join(' · '),
+            warning: p.clashes.isEmpty ? null : p.clashes.join('; '),
+          ),
+      ],
+    ];
   }
 }

@@ -15,9 +15,20 @@ class VehicleBreakdownException implements Exception {
   String toString() => message;
 }
 
+/// The report is accessible, but the server cannot preview this replacement.
+class VehicleBreakdownPreviewUnavailable extends VehicleBreakdownException {
+  VehicleBreakdownPreviewUnavailable()
+      : super('Other-trip preview is unavailable on this server.');
+}
+
 /// "Vehicle breakdown" report/approve/reject flow — shared between the
 /// driver app (report a breakdown) and the supervisor app (approve/reject).
 class VehicleBreakdownRepository {
+  VehicleBreakdownRepository({Future<Dio> Function()? dioProvider})
+      : _dioProvider = dioProvider ?? authorizedDio;
+
+  final Future<Dio> Function() _dioProvider;
+
   static const String driverRole = 'Company Driver';
   static const String operatorRole = 'Company Operator';
 
@@ -169,24 +180,90 @@ class VehicleBreakdownRepository {
     }
   }
 
-  Future<void> approve(
+  /// The broken vehicle's other trips and trip plans, with the work the
+  /// chosen replacement already has then — what approval can move.
+  Future<BreakdownVerifyPreview> fetchVerifyPreview(
+    String uniqueId, {
+    required String replacementVehicleId,
+  }) async {
+    try {
+      final dio = await _dioProvider();
+      final Response<dynamic> res;
+      try {
+        res = await dio.get(
+          '${ApiConfig.vehicleBreakdowns}$uniqueId/verify-preview/',
+          queryParameters: {'replacement_vehicle_id': replacementVehicleId},
+        );
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 404) rethrow;
+        // Some servers apply replacement_vehicle_id as a model filter even
+        // on this detail action. Pending reports have no replacement yet,
+        // so the filter hides the report. Confirm it is still accessible
+        // before treating this as an optional preview compatibility issue.
+        final report = await dio.get(
+          '${ApiConfig.vehicleBreakdowns}$uniqueId/',
+        );
+        if (report.data is! Map || report.data['unique_id'] != uniqueId) {
+          rethrow;
+        }
+        throw VehicleBreakdownPreviewUnavailable();
+      }
+      return BreakdownVerifyPreview.fromJson(
+        Map<String, dynamic>.from(res.data as Map),
+      );
+    } on VehicleBreakdownPreviewUnavailable {
+      rethrow;
+    } on DioException catch (e) {
+      throw VehicleBreakdownException(_message(e));
+    } catch (e) {
+      throw VehicleBreakdownException(e.toString());
+    }
+  }
+
+  /// Approves the breakdown. Omitted driver/operator = the same crew carries
+  /// on. Omitted [collectionPointIds] = every pending bin carries over;
+  /// omitted [moveAssignmentIds] = no other trip moves; omitted
+  /// [substitutePlanIds] = every plan the replacement has no clash for.
+  ///
+  /// Returns the backend's `skipped_moves` reasons: trips that couldn't move
+  /// because the replacement already has a trip at that date and time.
+  Future<List<String>> approve(
     String uniqueId, {
     String? remarks,
     required String replacementVehicleId,
-    required String replacementDriverId,
-    required String replacementOperatorId,
+    String? replacementDriverId,
+    String? replacementOperatorId,
+    List<String>? collectionPointIds,
+    List<String>? moveAssignmentIds,
+    List<String>? substitutePlanIds,
   }) async {
     try {
       final dio = await authorizedDio();
-      await dio.patch(
+      final res = await dio.patch(
         '${ApiConfig.vehicleBreakdowns}$uniqueId/verify/',
         data: {
           if (remarks != null && remarks.trim().isNotEmpty) 'remarks': remarks,
           'replacement_vehicle_id': replacementVehicleId,
-          'replacement_driver_id': replacementDriverId,
-          'replacement_operator_id': replacementOperatorId,
+          if (replacementDriverId != null)
+            'replacement_driver_id': replacementDriverId,
+          if (replacementOperatorId != null)
+            'replacement_operator_id': replacementOperatorId,
+          if (collectionPointIds != null)
+            'collection_point_ids': collectionPointIds,
+          if (moveAssignmentIds != null)
+            'move_assignment_ids': moveAssignmentIds,
+          if (substitutePlanIds != null)
+            'substitute_plan_ids': substitutePlanIds,
         },
       );
+      final skipped = res.data is Map ? res.data['skipped_moves'] : null;
+      return skipped is List
+          ? skipped
+              .whereType<Map>()
+              .map((s) => (s['reason'] ?? s['trip_id'] ?? '').toString())
+              .where((s) => s.isNotEmpty)
+              .toList()
+          : const [];
     } on DioException catch (e) {
       throw VehicleBreakdownException(_message(e));
     } catch (e) {
@@ -201,6 +278,25 @@ class VehicleBreakdownRepository {
       await dio.patch(
         '${ApiConfig.vehicleBreakdowns}$uniqueId/reject/',
         data: {'rejection_remarks': rejectionRemarks},
+      );
+    } on DioException catch (e) {
+      throw VehicleBreakdownException(_message(e));
+    } catch (e) {
+      throw VehicleBreakdownException(e.toString());
+    }
+  }
+
+  /// Closes an approved breakdown: the vehicle goes from BREAKDOWN back to
+  /// ACTIVE, so its blocked trips can start again.
+  Future<void> markRepaired(String uniqueId, {String? repairRemarks}) async {
+    try {
+      final dio = await authorizedDio();
+      await dio.patch(
+        '${ApiConfig.vehicleBreakdowns}$uniqueId/mark-repaired/',
+        data: {
+          if (repairRemarks != null && repairRemarks.trim().isNotEmpty)
+            'repair_remarks': repairRemarks.trim(),
+        },
       );
     } on DioException catch (e) {
       throw VehicleBreakdownException(_message(e));

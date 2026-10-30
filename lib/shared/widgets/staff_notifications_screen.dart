@@ -119,6 +119,10 @@ class _StaffNotificationsScreenState extends State<StaffNotificationsScreen> {
         return Icons.build_rounded;
       case 'TRIP_DELAY_REPORTED':
         return Icons.timer_rounded;
+      // A plan got no trip: its vehicle is under breakdown with no usable
+      // replacement (helpDoc 11-vehicle-breakdown.md, S6/S8).
+      case 'TRIP_NOT_SCHEDULED':
+        return Icons.event_busy_rounded;
       case 'RETRIP_REQUESTED':
         return Icons.route_rounded;
       case 'RETRIP_APPROVED':

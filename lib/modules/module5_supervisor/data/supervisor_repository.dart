@@ -190,6 +190,26 @@ class SupervisorRepository {
     }
   }
 
+  /// Moves a not-started trip to another vehicle, keeping its crew — the
+  /// fix for a trip blocked by a vehicle breakdown.
+  Future<void> changeTripVehicle(String id, String vehicleId) async {
+    try {
+      final dio = await _dioProvider();
+      await dio.patch('$_assignments$id/change-vehicle/', data: {
+        'vehicle_id': vehicleId,
+      });
+    } on DioException catch (e) {
+      // Refusals (busy at that time, under breakdown) come as a field error.
+      final data = e.response?.data;
+      if (data is Map && data['vehicle_id'] != null) {
+        final reason = data['vehicle_id'];
+        throw SupervisorException(
+            reason is List ? reason.join('\n') : reason.toString());
+      }
+      throw SupervisorException(_message(e));
+    }
+  }
+
   Future<void> cancelScheduledTrip(String id, String reason) async {
     try {
       final dio = await _dioProvider();

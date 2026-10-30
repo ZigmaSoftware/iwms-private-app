@@ -93,17 +93,25 @@ class OperatorTripVehicle {
   final String vehicleNo;
   final double? capacity;
 
+  /// `ACTIVE` or `BREAKDOWN`. A trip whose vehicle is under breakdown can't
+  /// be started until a supervisor marks the vehicle repaired.
+  final String operationalStatus;
+
   const OperatorTripVehicle({
     required this.uniqueId,
     required this.vehicleNo,
     this.capacity,
+    this.operationalStatus = '',
   });
+
+  bool get isUnderBreakdown => operationalStatus.toUpperCase() == 'BREAKDOWN';
 
   factory OperatorTripVehicle.fromJson(Map<String, dynamic> json) {
     return OperatorTripVehicle(
       uniqueId: json['unique_id']?.toString() ?? '',
       vehicleNo: json['vehicle_no']?.toString() ?? '',
       capacity: _parseDouble(json['capacity']),
+      operationalStatus: json['operational_status']?.toString() ?? '',
     );
   }
 }
@@ -595,6 +603,13 @@ class OperatorTripToday {
   /// control that can close it.
   bool get isClosed => status.toLowerCase() == 'completed';
 
+  /// Scheduled or In Progress — the only trips a driver can report a
+  /// breakdown or delay on. Completed and Cancelled ones are history.
+  bool get isLive {
+    final s = status.toLowerCase();
+    return s == 'scheduled' || s == 'in progress';
+  }
+
   /// True once the driver has explicitly pressed "Start Trip" — mirrors the
   /// backend's `require_trip_started` gate (which checks `actual_start_at`,
   /// not the legacy wall-clock-only `actual_start_time`).
@@ -928,6 +943,30 @@ class BinScanSubmitResult {
   bool get tripCompleted => context.progress.completed;
 }
 
+/// One end-early reason category (`TripRetripRequest.REASON_CODE_CHOICES`),
+/// sent back with `REASON_REQUIRED` so the app can offer a picker.
+class RetripReasonCode {
+  final String value;
+  final String label;
+
+  const RetripReasonCode({required this.value, required this.label});
+
+  /// "Other" is the one category that must be described in words.
+  bool get isOther => value.toUpperCase() == 'OTHER';
+
+  static List<RetripReasonCode> listFromJson(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => RetripReasonCode(
+              value: e['value']?.toString() ?? '',
+              label: e['label']?.toString() ?? '',
+            ))
+        .where((c) => c.value.isNotEmpty)
+        .toList();
+  }
+}
+
 /// Result of `POST .../trip-lifecycle/{id}/end/`. Three outcomes, not two:
 /// the trip closed outright ([ended]), it stayed open behind a new Re-Trip
 /// request ([retripRequested]), or the backend refused because stops remain
@@ -943,6 +982,14 @@ class OperatorTripEndResult {
   final OperatorTripRetripRequest? retripRequest;
   final OperatorTripToday? trip;
 
+  /// Backend `detail` on a [reasonRequired] answer — e.g. why a submitted
+  /// reason was rejected (too short), so the re-prompt can say so.
+  final String? message;
+
+  /// Reason categories offered with a [reasonRequired] answer. Empty from a
+  /// backend that predates them — the app then falls back to free text.
+  final List<RetripReasonCode> reasonCodes;
+
   const OperatorTripEndResult({
     required this.ended,
     required this.retripRequested,
@@ -951,11 +998,15 @@ class OperatorTripEndResult {
     this.pendingHouseholdCount = 0,
     this.retripRequest,
     this.trip,
+    this.message,
+    this.reasonCodes = const [],
   });
 
   factory OperatorTripEndResult.reasonRequired({
     required int pendingBinCount,
     required int pendingHouseholdCount,
+    String? message,
+    List<RetripReasonCode> reasonCodes = const [],
   }) =>
       OperatorTripEndResult(
         ended: false,
@@ -963,6 +1014,8 @@ class OperatorTripEndResult {
         reasonRequired: true,
         pendingBinCount: pendingBinCount,
         pendingHouseholdCount: pendingHouseholdCount,
+        message: message,
+        reasonCodes: reasonCodes,
       );
 
   factory OperatorTripEndResult.fromJson(Map<String, dynamic> json) {

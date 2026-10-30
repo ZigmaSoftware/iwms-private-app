@@ -9,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:animations/animations.dart';
 import 'package:intl/intl.dart';
 import 'package:iwms_private_app/core/env.dart';
+import 'package:iwms_private_app/core/network/trip_stale_signal.dart';
 import 'package:iwms_private_app/core/ui/app_copy.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/modules/module3_operator/services/bluetoothservices.dart';
@@ -190,10 +191,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
       StaffNotificationRepository();
   int _unreadNotificationCount = 0;
   StreamSubscription<Map<String, dynamic>>? _pushEvents;
+  StreamSubscription<String>? _staleTripEvents;
 
   @override
   void initState() {
     super.initState();
+    // The backend refused a write because this trip was closed or the stop
+    // moved to a continuation trip — reload to show the current trip.
+    _staleTripEvents = TripStaleSignal.events.listen((_) {
+      if (mounted) _loadAssignmentsForDriver();
+    });
     // A customer tapping "I'm home now" pushes `customer_available` — reload
     // so the household jumps to the top with its badge straight away.
     _pushEvents = PushNotificationService.instance.events.listen((data) {
@@ -238,6 +245,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   @override
   void dispose() {
     _pushEvents?.cancel();
+    _staleTripEvents?.cancel();
     super.dispose();
   }
 
@@ -1134,7 +1142,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
 
     final selected = _todayTrip;
-    if (selected == null || !selected.isHousehold) {
+    if (selected == null || !selected.isStarted) {
+      AppFlash.warning(context, 'Start trip first.');
+      return;
+    }
+
+    if (!selected.isHousehold) {
       final result = await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const OperatorTripScanScreen()),
       );

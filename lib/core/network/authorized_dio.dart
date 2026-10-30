@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/core/network/permission_error.dart';
+import 'package:iwms_private_app/core/network/trip_stale_signal.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
 
 Dio _cloneBaseDio() {
@@ -40,6 +41,9 @@ Dio _cloneBaseDio() {
             'action=${denied.action}',
           );
         }
+        // A write against a closed trip / carried-over stop: tell the trip
+        // screens to reload (see TripStaleSignal).
+        TripStaleSignal.notifyIfStale(error.response?.data);
         handler.next(error);
       },
     ),

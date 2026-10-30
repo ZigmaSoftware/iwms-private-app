@@ -8,6 +8,7 @@ import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
+import 'package:iwms_private_app/core/network/trip_stale_signal.dart';
 import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/data/models/operator_trip_models.dart';
@@ -563,15 +564,27 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
         await http.MultipartFile.fromPath('image', entry.photo!.path),
       );
 
-      final streamed = await request.send();
-      if (streamed.statusCode >= 400) {
-        throw Exception('Server error ${streamed.statusCode}');
+      final response = await http.Response.fromStream(await request.send());
+      dynamic body;
+      try {
+        body = json.decode(response.body);
+      } catch (_) {
+        body = null;
       }
-      final body = json.decode(
-        (await http.Response.fromStream(streamed)).body,
-      );
-      if (body['status'] != 'success') {
-        throw Exception(body['message'] ?? 'Could not save ${entry.name}');
+      if (response.statusCode >= 400 ||
+          body is! Map ||
+          body['status'] != 'success') {
+        if (TripStaleSignal.notifyIfStale(body) && mounted) {
+          // The stop moved / the trip closed: this sheet is for a stop the
+          // driver can no longer write to. The trip list reloads behind it.
+          AppFlash.warning(context, body['message'].toString());
+          Navigator.of(context).pop(false);
+          return;
+        }
+        throw Exception(
+          (body is Map ? body['message'] : null) ??
+              'Server error ${response.statusCode}',
+        );
       }
 
       if (!mounted) return;
@@ -633,6 +646,11 @@ class _HouseholdCollectSheetState extends State<HouseholdCollectSheet> {
         // A refusal the server actually answered (e.g. the trip isn't
         // started). Surface it and leave the visit open rather than pretending
         // the household was collected.
+        if (TripStaleSignal.notifyIfStale(result) && mounted) {
+          AppFlash.warning(context, result['message'].toString());
+          Navigator.of(context).pop(false);
+          return;
+        }
         if (mounted) {
           AppFlash.warning(
             context,

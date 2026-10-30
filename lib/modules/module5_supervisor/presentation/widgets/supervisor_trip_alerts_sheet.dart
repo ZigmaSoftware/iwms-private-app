@@ -4,6 +4,7 @@ import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_mode
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_breakdowns_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_delay_review_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_retrip_requests_screen.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_change_vehicle_sheet.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_photo_viewer.dart';
 
 /// Bottom sheet listing every alert on one trip, "Grouped list" layout
@@ -171,6 +172,20 @@ class SupervisorTripAlertsSheet extends StatelessWidget {
           label: 'Review',
           onPressed: () => then(
               () => open(SupervisorBreakdownsScreen(breakdownId: alert.refId))),
+        );
+      case TripAlertKind.vehicleBlocked:
+        final id = alert.refId;
+        if (id == null || id.isEmpty) return null;
+        return (
+          label: 'Change vehicle',
+          onPressed: () => then(() async {
+            final changed = await SupervisorChangeVehicleSheet.show(
+              navigator.context,
+              assignmentId: id,
+              tripDate: alert.date,
+            );
+            if (changed == true) onChanged?.call();
+          }),
         );
       case TripAlertKind.retrip:
         return (

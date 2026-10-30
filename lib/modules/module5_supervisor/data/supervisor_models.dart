@@ -182,6 +182,7 @@ enum TripAlertSeverity { critical, warning, info }
 
 enum TripAlertKind {
   breakdown,
+  vehicleBlocked,
   retrip,
   rejected,
   noDriver,
@@ -204,6 +205,7 @@ class SupervisorTripAlert {
     this.waitingStops = const [],
     this.refId,
     this.imageUrls = const [],
+    this.date,
   });
 
   final TripAlertKind kind;
@@ -226,11 +228,16 @@ class SupervisorTripAlert {
   /// Evidence photos the driver attached.
   final List<String> imageUrls;
 
+  /// The trip's date, for alerts whose action depends on it (Change vehicle
+  /// lists vehicles free on that date).
+  final DateTime? date;
+
   /// Customers waiting count once per customer, everything else once.
   int get count => waitingStops.isEmpty ? 1 : waitingStops.length;
 
   TripAlertSeverity get severity => switch (kind) {
         TripAlertKind.breakdown ||
+        TripAlertKind.vehicleBlocked ||
         TripAlertKind.retrip ||
         TripAlertKind.rejected ||
         TripAlertKind.noDriver ||
@@ -392,6 +399,7 @@ class SupervisorAssignment {
     this.staffSource = '',
     this.tripEvents = const [],
     this.tripPlanId = '',
+    this.vehicleUnderBreakdown = false,
   });
 
   final String uniqueId;
@@ -437,6 +445,11 @@ class SupervisorAssignment {
 
   /// The Trip Plan this daily trip was generated from.
   final String tripPlanId;
+
+  /// Not started and its vehicle is under breakdown, so the driver can't
+  /// start it until the trip moves to another vehicle or the vehicle is
+  /// marked repaired (backend `vehicle_under_breakdown`).
+  final bool vehicleUnderBreakdown;
 
   bool get isRemaining => !isCompleted && !isCancelled;
   int get collectedCount => stops.where((s) => s.isCollected).length;
@@ -489,6 +502,20 @@ class SupervisorAssignment {
             .map((u) => u.toString())
             .where((u) => u.isNotEmpty)
             .toList(),
+      ));
+    }
+    // A pending breakdown on this trip already has its own Review action;
+    // this one is for trips blocked by a breakdown reported elsewhere, or
+    // left on the broken vehicle at approval.
+    if (vehicleUnderBreakdown && !hasPendingBreakdown) {
+      alerts.add(SupervisorTripAlert(
+        kind: TripAlertKind.vehicleBlocked,
+        title: 'Vehicle under breakdown',
+        short: 'Vehicle under breakdown',
+        detail: '${vehicleNo.isEmpty ? 'The vehicle' : vehicleNo} can\'t '
+            'start this trip. Change the vehicle, or mark it repaired.',
+        refId: uniqueId,
+        date: tripDate,
       ));
     }
     if (hasPendingRetrip) {
@@ -722,6 +749,7 @@ class SupervisorAssignment {
           '',
       status: _normStatus(json['status'], fallback: 'SCHEDULED'),
       approvalStatus: json['approval_status']?.toString() ?? 'PENDING',
+      vehicleUnderBreakdown: json['vehicle_under_breakdown'] == true,
       tripDate: _parseDate(json['trip_date']),
       stops: stops,
       scheduledTime: json['scheduled_time']?.toString() ?? '',
