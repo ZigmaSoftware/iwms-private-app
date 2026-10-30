@@ -33,8 +33,10 @@ const bool kShowBinHouseholdKpiCards =
 const String _defaultPrivateApiBase = 'http://115.245.93.26:4216/api/v1';
 const String _defaultPrivateBackendOrigin = 'http://115.245.93.26:4216';
 
-// const String _defaultPrivateApiBase = 'http://192.168.3.120:8000/api/v1';
-// const String _defaultPrivateBackendOrigin = 'http://192.168.3.120:8000';
+
+
+// const String _defaultPrivateApiBase = 'http://192.168.6.44:8000/api/v1';
+// const String _defaultPrivateBackendOrigin = 'http://192.168.6.44:8000';
 
 // Override the private backend bases via dart-define if needed.
 const String _localApiOverride = String.fromEnvironment(

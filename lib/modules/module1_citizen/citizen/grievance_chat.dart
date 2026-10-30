@@ -11,7 +11,19 @@ import 'package:iwms_private_app/data/repositories/citizen_grievance_repository.
 /// Walks the citizen through category → sub-type → (location) → description,
 /// then raises a real ticket on the backend and shows the ticket number.
 class GrievanceChatScreen extends StatefulWidget {
-  const GrievanceChatScreen({super.key});
+  const GrievanceChatScreen({
+    super.key,
+    this.initialCategoryCode,
+    this.initialDescription,
+  });
+
+  /// When set (e.g. 'MISSED_PICKUP' from the "I was home" button), the chat
+  /// skips the menu and jumps straight to that category.
+  final String? initialCategoryCode;
+
+  /// Pre-filled into the input box when the chat asks for a description; the
+  /// citizen can edit it before sending.
+  final String? initialDescription;
 
   @override
   State<GrievanceChatScreen> createState() => _GrievanceChatScreenState();
@@ -78,14 +90,36 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
     } catch (_) {
       _meta = const GrievanceMeta();
     }
+    final code = widget.initialCategoryCode;
+    final preset = code == null
+        ? null
+        : (_meta?.categories ?? const <GrievanceCategoryOption>[])
+            .where((c) => c.code == code)
+            .firstOrNull;
+    if (preset != null) {
+      _user('Raise a grievance');
+      _pickCategory(preset);
+      return;
+    }
     _showMenu();
+  }
+
+  /// Moves to the description prompt, pre-filling the box when the screen
+  /// was opened with [GrievanceChatScreen.initialDescription].
+  Future<void> _askDescription(String prompt) async {
+    _stage = _Stage.askDescription;
+    final preset = widget.initialDescription;
+    if (preset != null && preset.isNotEmpty && _input.text.isEmpty) {
+      _input.text = preset;
+    }
+    await _botTyping(prompt);
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.animateTo(
-          _scroll.position.maxScrollExtent + 80,
+          _scroll.position.maxScrollExtent,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
@@ -113,7 +147,6 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
 
   void _setReplies(List<_Reply> r) {
     setState(() => _replies = r);
-    _scrollToBottom();
   }
 
   // ---------------- conversation ----------------
@@ -202,8 +235,8 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
       _stage = _Stage.askLocation;
       await _botTyping('📍 Where is the issue? (area, street or landmark)');
     } else {
-      _stage = _Stage.askDescription;
-      await _botTyping('📝 Please describe the issue in a sentence or two.');
+      await _askDescription(
+          '📝 Please describe the issue in a sentence or two.');
     }
   }
 
@@ -225,7 +258,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
         '${ticket.subcategoryName != null ? ' › ${ticket.subcategoryName}' : ''}\n'
         '⚡ Priority: ${ticket.priorityCode ?? '-'}\n'
         '🏷️ Status: ${ticket.statusName ?? 'Submitted'}\n'
-        '👥 Assigned to: ${ticket.assignedTeamName ?? 'Grievance Desk'}\n\n'
+        '👥 Assigned to: ${ticket.handlerName ?? ticket.handlerRole ?? 'Grievance Desk'}\n\n'
         'You can track progress any time from "Check my tickets".',
         ms: 600,
       );
@@ -260,8 +293,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
     if (_stage == _Stage.askLocation) {
       _user(text);
       _location = text;
-      _stage = _Stage.askDescription;
-      _botTyping('Thanks. 📝 Now please describe the issue.');
+      _askDescription('Thanks. 📝 Now please describe the issue.');
     } else if (_stage == _Stage.askDescription) {
       _user(text);
       _submit(text);

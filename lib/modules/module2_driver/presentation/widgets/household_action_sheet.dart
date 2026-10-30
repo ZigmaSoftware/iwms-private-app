@@ -1,11 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/data/repositories/operator_trip_repository.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/widgets/household_collect_sheet.dart';
 import 'package:iwms_private_app/modules/module3_operator/utils/assignment_status_store.dart';
+import 'package:iwms_private_app/shared/services/collection_photo_proof_service.dart';
+import 'package:iwms_private_app/shared/widgets/collection_photo_permission_dialog.dart';
 
 /// The customer action drawer — the same "Confirm customer" sheet the QR
 /// scanner opens, with **Collect / Collect later / Not available**. Reused by
@@ -66,10 +71,14 @@ Future<bool> showHouseholdActionSheet(
       assignmentId: assignmentId,
       // Close this drawer first, then hand the chosen exception back so the
       // reason sheet isn't fighting the collect drawer for the screen.
-      onSecondaryAction: (chosen) {
-        secondaryAction = chosen;
-        Navigator.of(sheetCtx).pop(false);
-      },
+      // A collected stop has its weight recorded; the server refuses to turn
+      // it into Collect later / Not available, so don't offer them.
+      onSecondaryAction: normalizedStatus == 'collected'
+          ? null
+          : (chosen) {
+              secondaryAction = chosen;
+              Navigator.of(sheetCtx).pop(false);
+            },
     ),
   );
 
@@ -92,14 +101,25 @@ Future<bool> showHouseholdActionSheet(
   final reason = await _askReason(context, status: action);
   if (reason == null || !context.mounted) return false;
 
+  CollectionPhotoProof? proof;
+  if (action == 'not_available') {
+    proof = await _captureHouseholdStatusProof(
+      context,
+      customerName: customerName,
+      assignmentId: assignmentId,
+    );
+    if (proof == null || !context.mounted) return false;
+  }
+
   try {
     await GetIt.instance<OperatorTripRepository>().markHouseholdStatus(
       customerId: customerId,
       status: action,
       reason: reason,
       assignmentId: assignmentId,
-      latitude: latitude,
-      longitude: longitude,
+      latitude: proof?.latitude.toStringAsFixed(6) ?? latitude,
+      longitude: proof?.longitude.toStringAsFixed(6) ?? longitude,
+      evidenceImage: proof?.file,
     );
     final localStatus = action == 'collect_later' ? 'later' : 'skipped';
     await AssignmentStatusStore.setStatusForAssignment(
@@ -119,6 +139,40 @@ Future<bool> showHouseholdActionSheet(
   } catch (e) {
     if (context.mounted) AppFlash.error(context, 'Could not update: $e');
     return false;
+  }
+}
+
+Future<CollectionPhotoProof?> _captureHouseholdStatusProof(
+  BuildContext context, {
+  required String customerName,
+  required String assignmentId,
+}) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+  const service = CollectionPhotoProofService();
+  try {
+    await service.ensureCaptureReady();
+    final captured = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 88,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
+    if (captured == null) return null;
+    return service.stamp(
+      source: File(captured.path),
+      wasteType: 'HOUSEHOLD - NOT AVAILABLE',
+      stopLabel: customerName,
+      assignmentId: assignmentId,
+    );
+  } on CollectionPhotoProofException catch (e) {
+    if (context.mounted) await handleCollectionPhotoProofFailure(context, e);
+    return null;
+  } catch (_) {
+    if (context.mounted) {
+      AppFlash.error(context, 'Could not prepare the photo. Please retake it.');
+    }
+    return null;
   }
 }
 

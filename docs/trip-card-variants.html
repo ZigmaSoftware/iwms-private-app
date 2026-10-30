@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trip card: 22 design variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>:root{
+  color-scheme: light;
+  --page:#ECE9E3; --stage:#F5F3EF; --card:#FFFFFF; --card2:#F6F4F0; --line:#E5E1D9; --track:#ECE8E1;
+  --ink:#1B1A21; --ink2:#5D5A66; --ink3:#8D8994;
+  --accent:#4A43D4; --on-accent:#FFFFFF; --accent-soft:#ECEBFD; --accent-ink:#3730A3;
+  --live:#2F6BE0; --live-soft:#E4EDFC;
+  --ok:#1E8A5A; --ok-soft:#E1F3E9;
+  --warn:#C27A0E; --warn-ink:#7A4B06; --warn-soft:#FBF0D9; --on-warn:#FFFFFF;
+  --idle:#6B6876; --idle-soft:#ECEAE6;
+  --map-bg:#E9EDE4; --map-st:#FFFFFF; --map-park:#D6E5CC;
+  --m3:#F4F2FB;
+  --shadow:0 1px 2px rgba(40,30,10,.05),0 6px 18px rgba(40,30,10,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+    --page:#111015; --stage:#17161C; --card:#211F27; --card2:#1A1920; --line:#302E38; --track:#2D2B35;
+    --ink:#F2F0F6; --ink2:#B3AFBD; --ink3:#85818F;
+    --accent:#8C86FF; --on-accent:#14122B; --accent-soft:#2A2852; --accent-ink:#CFCCFF;
+    --live:#73A3FF; --live-soft:#1D2A45;
+    --ok:#4FC48C; --ok-soft:#163025;
+    --warn:#F0B44F; --warn-ink:#F6CF8C; --warn-soft:#3A2C13; --on-warn:#2A1C04;
+    --idle:#A6A2AF; --idle-soft:#2B2A31;
+    --map-bg:#1C221E; --map-st:#2C342E; --map-park:#22301F;
+    --m3:#24222F;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+.ic{flex:none;display:block}
+
+/* page chrome */
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--page) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1560px;margin:0 auto;padding:18px 24px;display:flex;flex-wrap:wrap;gap:14px 28px;align-items:center;justify-content:space-between}
+.top h1{margin:0;font-size:22px;letter-spacing:-.01em}
+.top p{margin:4px 0 0;color:var(--ink2);font-size:14px}
+.seg{display:flex;gap:4px;background:var(--card2);border:1px solid var(--line);padding:4px;border-radius:14px;flex-wrap:wrap}
+.seg button{height:38px;padding:0 14px;border-radius:10px;font-size:14px;font-weight:600;color:var(--ink2);display:flex;align-items:center;gap:8px}
+.seg button i{width:8px;height:8px;border-radius:50%}
+.seg button[aria-pressed=true]{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.grid{max-width:1560px;margin:0 auto;padding:28px 24px 72px;display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:36px 26px}
+.cell-h{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;padding:0 4px}
+.cell-h .no{flex:none;min-width:36px;height:26px;border-radius:8px;background:var(--ink);color:var(--page);font-weight:700;font-size:13px;display:grid;place-items:center}
+.cell-h h2{margin:0;font-size:16px}
+.cell-h p{margin:3px 0 0;color:var(--ink2);font-size:13.5px;line-height:1.4}
+.stage{background:var(--stage);border-radius:24px;padding:22px 16px;display:flex;justify-content:center;align-items:flex-start;min-height:200px}
+.stage>*{width:100%;max-width:360px}
+
+/* shared card parts */
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;font-size:14px;line-height:1.35;color:var(--ink)}
+.pad{padding:16px 18px}
+.row-between{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.muted{color:var(--ink2)} .faint{color:var(--ink3)} .sm{font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 9px;border-radius:99px;font-weight:600;font-size:13px;white-space:nowrap;flex:none}
+.zone{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.02em;padding:3px 8px;border-radius:6px;background:var(--card2);border:1px solid var(--line);color:var(--ink2);margin-left:6px;white-space:nowrap}
+.bar{border-radius:99px;background:var(--track);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:inherit}
+.alert{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--warn-soft);color:var(--warn-ink);font-weight:500;margin-top:14px}
+.btn{height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:15px;flex:1;white-space:nowrap}
+.btn-primary{background:var(--accent);color:var(--on-accent)}
+.btn-tonal{background:var(--accent-soft);color:var(--accent-ink)}
+.btn-line{border:1.5px solid var(--line);color:var(--ink)}
+.btn-icon{flex:0 0 48px}
+.btn-row{display:flex;gap:10px;margin-top:16px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:9px;background:var(--card2);border:1px solid var(--line);font-size:13px;font-weight:500;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.info{display:flex;align-items:center;gap:10px;min-height:28px}
+.info .ic{color:var(--ink3)}
+.tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink)}
+.av{display:inline-grid;place-items:center;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-weight:700;flex:none}
+.plate{display:inline-flex;align-items:stretch;background:#F7CF1F;color:#111;border:1.5px solid #1b1b1b;border-radius:6px;font-weight:800;letter-spacing:.05em;line-height:1;overflow:hidden;white-space:nowrap;flex:none}
+.plate .ind{font-size:.42em;padding:0 .3em .45em .45em;display:flex;align-items:flex-end;color:#1D4FB8;letter-spacing:0}
+.plate .pno{padding:.34em .55em .3em .25em}
+.ring{position:relative;flex:none}
+.ring svg{display:block}
+.ring-in{position:absolute;inset:0;display:grid;place-items:center;text-align:center;line-height:1}
+.lnk{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--accent);height:44px}
+.hr{height:1px;background:var(--line);margin:14px 0}
+
+/* 1 refined */
+.v1-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.v1-title{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.v1-sub{display:flex;align-items:center;gap:6px;color:var(--ink2);margin-top:4px}
+.v1-sub .ic{color:var(--ink3)}
+.v1 .zone{margin:10px 0 0}
+.v1-prog{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 8px}
+.v1-pl b{font-size:20px} .v1-kg{font-weight:700;font-size:16px}
+.v1-info{display:grid;gap:6px;margin-top:14px}
+.v1-act{display:flex;gap:10px;padding:0 18px 18px}
+
+/* 2 ring */
+.v2-head{display:flex;gap:16px;align-items:center}
+.v2 .ring-in b{font-size:26px;font-weight:800;display:block}
+.v2 .ring-in small{font-size:12px;color:var(--ink2)}
+.v2-right{display:grid;gap:8px;justify-items:start}
+.v2-title{font-size:20px;font-weight:700}
+.v2-kg{display:flex;gap:6px;align-items:center;color:var(--ink2);font-weight:500}
+.v2 .chips{margin-top:16px}
+.v2-meta{display:flex;align-items:center;gap:6px;margin-top:12px;color:var(--ink2);font-size:13px;flex-wrap:wrap}
+
+/* 3 rail */
+.v3{border-left:6px solid var(--rail)}
+.v3-in{padding:14px 16px 6px}
+.v3-title{font-weight:700;font-size:17px}
+.v3-status{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+.v3-status i{width:8px;height:8px;border-radius:50%}
+.v3-meta{font-size:13px;margin-top:3px;display:flex;align-items:center;flex-wrap:wrap}
+.v3-prog{display:flex;align-items:center;gap:10px;margin-top:12px}
+.v3-prog .bar{flex:1}
+.v3-n{font-size:13px;color:var(--ink2);white-space:nowrap}.v3-n b{color:var(--ink)}
+.v3-foot{display:flex;gap:14px;align-items:center;margin-top:12px;font-size:13px;color:var(--ink2);flex-wrap:wrap}
+.v3-foot>span{display:inline-flex;align-items:center;gap:5px}
+.v3-alert{display:flex;align-items:center;gap:6px;color:var(--warn);font-weight:600;font-size:13px;margin-top:10px}
+.v3-act{display:flex;justify-content:space-between;padding:2px 16px 4px;border-top:1px solid var(--line);margin-top:10px}
+
+/* 4 header band */
+.v4-head{color:#fff;padding:16px 18px 18px}
+.v4-route{font-weight:700;font-size:18px}
+.v4-pill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:99px;background:rgba(255,255,255,.18);font-weight:600;font-size:13px}
+.v4-pill i{width:7px;height:7px;border-radius:50%;background:#fff}
+.v4-big{font-size:44px;font-weight:800;letter-spacing:-.02em;margin-top:14px;line-height:1}
+.v4-big span{font-size:20px;font-weight:600;opacity:.75}
+.v4-cap{display:flex;justify-content:space-between;opacity:.9;margin:6px 0 12px;font-weight:500}
+.v4-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.25);overflow:hidden}
+.v4-bar i{display:block;height:100%;background:#fff;border-radius:inherit}
+.v4-meta{display:flex;align-items:center;flex-wrap:wrap;color:var(--ink2);font-size:13px}
+.v4-grid{display:grid;gap:6px;margin-top:12px}
+
+/* 5 plate first */
+.v5-top{background:var(--card2);border-bottom:1px solid var(--line);padding:18px;display:grid;justify-items:center;gap:10px}
+.v5-truck{width:48px;height:48px;border-radius:14px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;color:var(--ink2)}
+.v5-driver{display:flex;align-items:center;gap:8px;font-weight:600}
+.v5-route{font-size:18px;font-weight:700}
+.v5-prog{display:grid;gap:8px;margin-top:14px}
+.v5-time{display:flex;align-items:center;gap:6px;margin-top:12px;color:var(--ink2);flex-wrap:wrap}
+
+/* 6 dots */
+.v6-title{font-size:20px;font-weight:700}
+.v6-sub{margin-top:4px;display:flex;align-items:center;flex-wrap:wrap}
+.v6-dots{display:grid;grid-template-columns:repeat(22,1fr);gap:4px;margin-top:16px}
+.v6-dots i{aspect-ratio:1;border-radius:3px;background:var(--track)}
+.v6-dots i.on{background:var(--on)}
+.v6-leg{display:flex;gap:14px;align-items:center;margin-top:12px;font-size:13px;color:var(--ink2);flex-wrap:wrap}
+.v6-leg>span{display:inline-flex;align-items:center;gap:6px}
+.v6-leg b{color:var(--ink)}
+.v6-leg .lg{width:10px;height:10px;border-radius:3px;background:var(--track);display:inline-block}
+.v6-kg{margin-left:auto}
+.v6-info{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+
+/* 7 tiles */
+.v7-title{font-size:19px;font-weight:700}
+.v7-tiles{display:grid;grid-template-columns:1.25fr 1.15fr .8fr;gap:8px;margin-top:14px}
+.v7-tile{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:grid;gap:4px}
+.v7-tile .ic{color:var(--ink3)}
+.v7-tile b{font-size:21px;font-weight:800;letter-spacing:-.01em}
+.v7-tile b small{font-size:13px;font-weight:600;color:var(--ink2)}
+.v7-tile span{font-size:12px;color:var(--ink2)}
+.v7 .bar{margin-top:10px}
+
+/* 8 stepper */
+.v8-title{font-size:19px;font-weight:700}
+.v8-steps{display:flex;margin:18px -6px 4px}
+.st{flex:1;display:grid;justify-items:center;gap:6px;position:relative;text-align:center}
+.st+.st::before{content:"";position:absolute;top:14px;right:50%;width:100%;height:3px;background:var(--track);z-index:0}
+.st.on::before{background:var(--ok)}.st-pending::before{background:var(--warn)!important}.st-active::before{background:var(--live)!important}
+.st-dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;position:relative;z-index:1;background:var(--card);border:2px solid var(--track);color:var(--ink3)}
+.st-done .st-dot{background:var(--ok);border-color:var(--ok);color:#fff}
+.st-pending .st-dot{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.st-active .st-dot{border-color:var(--live);box-shadow:0 0 0 4px var(--live-soft)}
+.st-active .st-dot::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--live)}
+.st-l{font-size:12px;font-weight:600;color:var(--ink2)}
+.st-pending .st-l{color:var(--warn)} .st-active .st-l{color:var(--live)}
+.v8-cap{margin-top:14px;padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13.5px}
+.v8-mini{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--ink2)}
+.v8-mini span{display:inline-flex;gap:6px;align-items:center}
+
+/* 9 map */
+.v9-map{position:relative;border-bottom:1px solid var(--line)}
+.v9-map svg{display:block;width:100%;height:auto}
+.v9-chip{position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:99px;background:var(--card);font-weight:600;font-size:12.5px;box-shadow:var(--shadow)}
+.v9-chip i{width:8px;height:8px;border-radius:50%}
+.v9-chip2{left:auto;right:10px}
+.v9-title{font-size:18px;font-weight:700}
+.v9-row{display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap;font-size:13px;color:var(--ink2)}
+.v9-row span{display:inline-flex;align-items:center;gap:6px}
+
+/* 10 driver */
+.v10-drv{display:flex;gap:12px;align-items:center}
+.v10-dn{display:grid;gap:3px;justify-items:start;flex:1}
+.v10-dn b{font-size:16px}
+.v10-call{width:48px;height:48px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;flex:none}
+.v10-route{font-size:18px;font-weight:700}
+.v10-prog{display:grid;gap:8px;margin-top:14px}
+.v10-time{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+
+/* 11 compact */
+.v11-row{display:flex;align-items:center;gap:12px;padding:12px 14px}
+.v11-pc{font-size:11px;font-weight:700}
+.v11-mid{flex:1;min-width:0}
+.v11-t{font-weight:700;font-size:15.5px}
+.v11-s{flex-wrap:wrap;display:flex;align-items:center;gap:8px;font-size:12.5px;margin-top:4px}
+.v11-r{display:grid;justify-items:end;font-size:12.5px;gap:3px}
+.v11-r b{font-size:15px}
+.v11-row>.ic{color:var(--ink3)}
+.v11-alert{display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--warn-soft);color:var(--warn-ink);font-size:12.5px;font-weight:600}
+.v11-list{display:grid;gap:10px}
+.v11-ghost{opacity:.45}
+
+/* 12 issue first */
+.v12-band{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.v12-ic{width:40px;height:40px;border-radius:12px;background:var(--card);display:grid;place-items:center;flex:none}
+.v12-band b{display:block;font-size:14.5px;line-height:1.25}
+.v12-band small{display:block;opacity:.85;font-size:12.5px;margin-top:2px}
+.v12-band>div{flex:1}
+.v12-btn{height:36px;padding:0 14px;border-radius:10px;background:var(--warn);color:var(--on-warn);font-weight:700;font-size:13px}
+.v12-title{font-size:19px;font-weight:700}
+.v12-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:14px;font-size:13.5px}
+.v12-grid .info{min-height:24px}
+
+/* 13 night */
+.v13{background:radial-gradient(130% 110% at 0% 0%,#2E3285 0%,#161838 52%,#0E1023 100%);border-color:#2A2D55;color:#EEF0FF}
+.v13-route{font-size:19px;font-weight:700}
+.v13-sub{color:rgba(225,228,255,.62);font-size:13px;margin-top:3px}
+.v13-pill{white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 11px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);font-size:12.5px;font-weight:600}
+.v13-pill i{width:7px;height:7px;border-radius:50%;box-shadow:0 0 8px currentColor}
+.v13-big{font-size:46px;font-weight:800;letter-spacing:-.02em;margin-top:16px;line-height:1;background:linear-gradient(90deg,#fff,#C7CCFF);-webkit-background-clip:text;background-clip:text;color:transparent}
+.v13-big span{font-size:20px;font-weight:600}
+.v13-cap{display:flex;justify-content:space-between;color:rgba(225,228,255,.7);margin:8px 0 12px}
+.v13-cap b{color:#fff}
+.v13-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.1)}
+.v13-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#5EEAD4,#818CF8);box-shadow:0 0 14px rgba(129,140,248,.8)}
+.v13-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.v13-chips>span:not(.plate){display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:9px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);font-size:12.5px}
+.v13-alert{display:flex;gap:10px;align-items:center;margin-top:14px;padding:11px 13px;border-radius:12px;background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.28);color:#FCD58E;font-weight:500}
+.v13-p{background:#fff;color:#1E1B4B}
+.v13-s{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#fff}
+
+/* 14 road */
+.v14-title{font-size:19px;font-weight:700}
+.v14-road{position:relative;height:44px;border-radius:12px;background:#45444E;margin-top:18px;overflow:visible}
+.v14-done{position:absolute;left:0;top:0;bottom:0;border-radius:12px 0 0 12px;opacity:.55}
+.v14-lane{position:absolute;left:10px;right:10px;top:50%;height:2px;margin-top:-1px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.75) 0 14px,transparent 14px 26px)}
+.v14-truck{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:34px;border-radius:10px;background:#FFFFFF;color:#1B1A21;display:grid;place-items:center;box-shadow:0 4px 12px rgba(0,0,0,.35);transition:left .4s ease}
+.v14-ends{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12.5px;color:var(--ink2)}
+.v14-ends span{display:inline-flex;gap:4px;align-items:center}
+.v14-ends .mid{color:var(--ink);font-size:14px}
+
+/* 15 ticket */
+.v15-main{display:grid;grid-template-columns:88px 1fr}
+.v15-stub{color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 6px;gap:2px}
+.v15-stub b{font-size:52px;line-height:1;font-weight:800}
+.v15-stub span{font-size:12px;opacity:.85;font-weight:600}
+.v15-body{padding:14px 16px;display:grid;gap:8px}
+.v15-kv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+.v15-kv span{display:block;font-size:11.5px;color:var(--ink3)}
+.v15-kv b{font-size:14.5px}
+.v15-tear{position:relative;border-top:2px dashed var(--line);margin:0 16px}
+.v15-tear::before,.v15-tear::after{content:"";position:absolute;top:-12px;width:22px;height:22px;border-radius:50%;background:var(--stage)}
+.v15-tear::before{left:-29px}.v15-tear::after{right:-29px}
+.v15-low{display:grid;gap:0}
+.v15-who{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.v15-who span{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+
+/* 16 pictogram */
+.v16-status{display:flex;align-items:center;gap:12px}
+.v16-sic{width:56px;height:56px;border-radius:18px;background:var(--s);color:var(--c);display:grid;place-items:center;flex:none}
+.v16-status b{display:block;font-size:20px;color:var(--c)}
+.v16-status .muted{font-weight:600}
+.v16-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.v16-t{display:flex;align-items:center;gap:9px;padding:9px;min-width:0;border-radius:16px;background:var(--card2);border:1px solid var(--line);min-height:68px}
+.v16-i{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;flex:none}
+.v16-wide{grid-column:span 2}.v16-drv{margin-left:auto}.v16-t b{white-space:nowrap;font-size:18px;letter-spacing:-.01em;font-weight:800}
+.v16-t b small{font-size:13px;color:var(--ink2);font-weight:600}
+.v16-alert{display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px 14px;border-radius:16px;background:var(--warn-soft);color:var(--warn-ink);font-size:16px}
+.v16 .btn{height:58px;font-size:17px;border-radius:16px}
+.v16 .btn-icon{flex:0 0 58px}
+
+/* 17 bento */
+.v17-title{font-size:19px;font-weight:700}
+.v17-bento{display:grid;grid-template-columns:1.1fr 1fr;grid-template-rows:auto auto;gap:8px;margin-top:14px}
+.v17-b{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:12px}
+.v17-big{grid-row:span 2;display:flex;flex-direction:column;justify-content:space-between;gap:10px}
+.v17-big b{font-size:44px;font-weight:800;line-height:.95;letter-spacing:-.02em}
+.v17-big small{font-size:13px;color:var(--ink2);font-weight:500;display:block;margin-top:4px}
+.v17-b .lbl{display:flex;align-items:center;gap:6px;color:var(--ink3);font-size:12px;font-weight:600}
+.v17-b .val{font-size:18px;font-weight:700;margin-top:4px}
+.v17-wide{grid-column:span 2;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.v17-wide span{display:inline-flex;gap:8px;align-items:center;font-weight:600}
+
+/* 18 filling card */
+.v18-top{position:relative;border-bottom:1px solid var(--line)}
+.v18-fill{position:absolute;left:0;top:0;bottom:0;transition:width .5s ease}
+.v18-c{position:relative;padding:16px 18px}
+.v18-route{font-size:18px;font-weight:700}
+.v18-pct{font-size:52px;font-weight:800;letter-spacing:-.03em;line-height:1;margin-top:14px}
+.v18-pct small{font-size:22px}
+.v18-c .muted{margin-top:4px}
+.v18-info{display:grid;gap:6px}
+
+/* 19 material 3 */
+.v19{background:var(--m3);border:0;border-radius:24px;box-shadow:none}
+.v19-over{font-size:12.5px;color:var(--ink2)}
+.v19-h{font-size:22px;font-weight:600;margin-top:2px}
+.v19-sub{font-size:13.5px;margin-top:2px}
+.v19-ast{white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px 0 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:13px;font-weight:600}
+.v19-track{display:flex;align-items:center;gap:4px;height:6px;margin-top:18px}
+.v19-track .a{height:100%;border-radius:99px}
+.v19-track .r{flex:1;height:100%;border-radius:99px;background:var(--accent-soft);position:relative}
+.v19-track .r::after{content:"";position:absolute;right:1px;top:1px;width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.v19-nums{display:flex;justify-content:space-between;margin-top:8px;font-size:13.5px}
+.v19-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.v19-chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px 0 8px;border-radius:8px;border:1px solid var(--line);font-size:13px;font-weight:500}
+.v19-chip .ic{color:var(--accent)}
+.v19-banner{display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px 8px 10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line)}
+.v19-banner .ic{color:var(--warn)}
+.v19-banner span{flex:1;font-size:13.5px}
+.v19-banner button{color:var(--accent);font-weight:600;font-size:13.5px;padding:8px 10px}
+.v19-btns{display:flex;gap:8px;margin-top:16px}
+.v19-btns .btn{border-radius:99px;height:44px;font-size:14px}
+.v19 .btn-line{border:1px solid var(--ink3);color:var(--accent)}
+
+/* 20 editorial */
+.v20{padding:20px 20px 10px}
+.v20-grid{display:flex;gap:16px;align-items:flex-start}
+.v20-letter{font-size:92px;font-weight:200;line-height:.78;letter-spacing:-.05em}
+.v20-r{flex:1;display:grid;gap:6px;padding-top:2px}
+.v20-st{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:13px}
+.v20-st i{width:7px;height:7px;border-radius:50%}
+.v20-cat{font-size:15px;font-weight:500;line-height:1.3}
+.v20-zone{font-size:12px;letter-spacing:.04em}
+.v20-rule{height:1px;background:var(--ink);opacity:.85;margin:18px 0 14px}
+.v20-stats{display:grid;grid-template-columns:repeat(3,1fr)}
+.v20-stats>div{padding-right:10px}
+.v20-stats>div+div{border-left:1px solid var(--line);padding-left:12px}
+.v20-stats b{font-size:22px;font-weight:600;letter-spacing:-.02em;display:block}
+.v20-stats b span{font-size:14px;color:var(--ink3);font-weight:500}
+.v20-stats small{font-size:12px;color:var(--ink2)}
+.v20 .bar{margin-top:14px}
+.v20-who{display:flex;justify-content:space-between;margin-top:14px;font-size:13.5px;color:var(--ink2)}
+.v20-alert{display:flex;align-items:center;gap:7px;margin-top:12px;color:var(--warn);font-weight:600;font-size:13px}
+.v20-act{display:flex;gap:18px;margin-top:8px;border-top:1px solid var(--line)}
+
+/* 21 expandable */
+.v21 summary{list-style:none;display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
+.v21 summary::-webkit-details-marker{display:none}
+.v21 .ring-in b{font-size:13px}
+.v21-mid{flex:1;min-width:0}
+.v21-t{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+.v21-t .pill{height:24px;font-size:12px;padding:0 9px 0 7px}
+.v21-s{font-size:13px;color:var(--ink2);margin-top:4px}
+.v21-chev{width:36px;height:36px;border-radius:50%;background:var(--card2);display:grid;place-items:center;transition:transform .25s;flex:none}
+.v21[open] .v21-chev{transform:rotate(180deg)}
+.v21-body{padding:0 16px 16px;border-top:1px solid var(--line)}
+.v21-body .v1-info{margin-top:12px}
+.v21-hint{font-size:12px;color:var(--ink3);padding:0 16px 12px;margin-top:-6px}
+.v21[open] .v21-hint{display:none}
+
+/* 22 dock */
+.v22-title{font-size:19px;font-weight:700}
+.v22-dock{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--card2)}
+.v22-dock button{display:grid;justify-items:center;gap:6px;padding:12px 4px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.v22-dock button span{width:46px;height:46px;border-radius:15px;display:grid;place-items:center}
+.v22-info{display:grid;gap:6px;margin-top:12px}
+</style></head>
+<body>
+<div class="top"><div class="top-in"><div><h1>Trip card: 22 design variants</h1><p>Same trip, 22 designs. Switch the trip state to see how each one handles it.</p></div><div class="seg" id="seg" role="group" aria-label="Trip state"></div></div></div>
+<main class="grid" id="grid"></main>
+<script>const BASE={route:'B',category:'Household',waste:'Mixed Waste',zone:'ZNE3-GAMMA-01',vehicle:'UP16KT1912',driver:'Ashish Kasana'};
+const STATES={
+  approval:{name:'Needs approval',dot:'var(--warn)',status:'live',houses:2,total:132,kg:24,date:'13 Oct',time:'10:43',run:1,alert:'Awaiting assignment approval'},
+  live:{name:'Collecting',dot:'var(--live)',status:'live',houses:86,total:132,kg:412.5,date:'13 Oct',time:'10:43',run:1,alert:null},
+  scheduled:{name:'Scheduled',dot:'var(--idle)',status:'scheduled',houses:0,total:132,kg:0,date:'14 Oct',time:'10:43',run:1,alert:null},
+  done:{name:'Completed',dot:'var(--ok)',status:'done',houses:132,total:132,kg:618.4,date:'12 Oct',time:'06:15',run:2,alert:null}
+};
+const STATUS={
+  live:{label:'In progress',c:'var(--live)',s:'var(--live-soft)',icon:'play',grad:'linear-gradient(135deg,#4338CA,#2F6BE0)',glow:'#7DD3FC'},
+  scheduled:{label:'Scheduled',c:'var(--idle)',s:'var(--idle-soft)',icon:'clock',grad:'linear-gradient(135deg,#4F4C62,#7A7690)',glow:'#CBD5E1'},
+  done:{label:'Completed',c:'var(--ok)',s:'var(--ok-soft)',icon:'checkc',grad:'linear-gradient(135deg,#166F4C,#22A06B)',glow:'#6EE7B7'}
+};
+const I={
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>',
+  truck:'<path d="M2.5 5.5h11.5v10H2.5z"/><path d="M14 9h4l3.5 3.5v3H14"/><circle cx="6.5" cy="17" r="2" style="fill:var(--card,#fff)"/><circle cx="17.5" cy="17" r="2" style="fill:var(--card,#fff)"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.6-3.6 3.8-5.5 7.5-5.5s6.9 1.9 7.5 5.5"/>',
+  alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.6v.01"/>',
+  nav:'<path d="M12 2.8 19 20.5 12 16.7 5 20.5z" style="fill:currentColor"/>',
+  more:'<circle cx="5" cy="12" r="1.3" style="fill:currentColor"/><circle cx="12" cy="12" r="1.3" style="fill:currentColor"/><circle cx="19" cy="12" r="1.3" style="fill:currentColor"/>',
+  home:'<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/>',
+  bin:'<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/>',
+  weight:'<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M7.5 10.5a4.5 4.5 0 0 1 9 0"/><path d="M12 10.5l1.8-2.4"/>',
+  phone:'<path d="M21 16.4v2.9a1.9 1.9 0 0 1-2.1 1.9A18.8 18.8 0 0 1 2.8 5.1 1.9 1.9 0 0 1 4.7 3h2.9a1.9 1.9 0 0 1 1.9 1.6c.1.9.4 1.8.7 2.7a1.9 1.9 0 0 1-.4 2L8.5 10.6a15 15 0 0 0 4.9 4.9l1.3-1.3a1.9 1.9 0 0 1 2-.4c.9.3 1.8.6 2.7.7a1.9 1.9 0 0 1 1.6 1.9z"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  checkc:'<circle cx="12" cy="12" r="9.5" style="fill:currentColor" stroke="none"/><path d="M8 12.3l2.7 2.7 5.3-5.4" style="stroke:var(--card,#fff)" stroke-width="2.2"/>',
+  play:'<circle cx="12" cy="12" r="9.5" style="fill:currentColor" stroke="none"/><path d="M10.2 8.6v6.8l5.4-3.4z" style="fill:var(--card,#fff)" stroke="none"/>',
+  pin:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  flag:'<path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/>',
+  chev:'<path d="M6 9l6 6 6-6"/>',
+  chevr:'<path d="M9 6l6 6-6 6"/>',
+  hourglass:'<path d="M6 3h12M6 21h12"/><path d="M7.5 3c0 4.5 4.5 5.5 4.5 9s-4.5 4.5-4.5 9"/><path d="M16.5 3c0 4.5-4.5 5.5-4.5 9s4.5 4.5 4.5 9"/>',
+  route:'<circle cx="6" cy="19" r="2.3"/><circle cx="18" cy="5" r="2.3"/><path d="M8.3 19H16a3.5 3.5 0 0 0 0-7H8a3.5 3.5 0 0 1 0-7h7.7"/>',
+  repeat:'<path d="M17 2.5l3 3-3 3"/><path d="M4 11V9.5a4 4 0 0 1 4-4h12"/><path d="M7 21.5l-3-3 3-3"/><path d="M20 13v1.5a4 4 0 0 1-4 4H4"/>',
+  bell:'<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/>',
+  eye:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  zone:'<path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/>'
+};
+const ic=(n,s=18)=>`<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+const pill=d=>`<span class="pill" style="color:${d.S.c};background:${d.S.s}">${ic(d.S.icon,17)}${d.S.label}</span>`;
+const alertBox=d=>d.alert?`<div class="alert" role="status">${ic('alert',19)}<span>${d.alert}</span></div>`:'';
+const bar=(d,h,c)=>`<div class="bar" style="height:${h}px"><i style="width:${d.p}%;min-width:${d.p>0?h:0}px;background:${c||d.S.c}"></i></div>`;
+const plate=(d,s=14)=>`<span class="plate" style="font-size:${s}px" aria-label="Vehicle ${d.vehicle}"><span class="ind">IND</span><span class="pno">${d.plateTxt}</span></span>`;
+const avatar=(n,s=36)=>`<span class="av" style="width:${s}px;height:${s}px;font-size:${Math.round(s*.38)}px">${n.split(' ').map(w=>w[0]).slice(0,2).join('')}</span>`;
+const primary=d=>d.status==='done'?{label:'View route',icon:'route'}:{label:'Track vehicle',icon:'nav'};
+const btnP=(d,cls='btn-primary')=>{const p=primary(d);return `<button class="btn ${cls}">${ic(p.icon,18)}${p.label}</button>`};
+const btnMore=(cls='btn-tonal')=>`<button class="btn btn-icon ${cls}" aria-label="More actions">${ic('more',20)}</button>`;
+const btnActions=(cls='btn-line')=>`<button class="btn ${cls}">${ic('more',18)}Actions</button>`;
+const first=n=>n.split(' ')[0];
+const infoRows=d=>`<div class="info">${ic('clock',18)}<span>${d.date}, ${d.time}</span><span class="tag">Run ${d.run}</span></div><div class="info">${ic('truck',18)}${plate(d,13)}</div><div class="info">${ic('user',18)}<span>${d.driver}</span></div>`;
+function ring(p,size,sw,color,inner){
+  const r=(size-sw)/2,c=2*Math.PI*r,off=c*(1-p/100),h=size/2;
+  const arc=p>0?`<circle cx="${h}" cy="${h}" r="${r}" fill="none" style="stroke:${color}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 ${h} ${h})"/>`:'';
+  return `<div class="ring" style="width:${size}px;height:${size}px"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${h}" cy="${h}" r="${r}" fill="none" style="stroke:var(--track)" stroke-width="${sw}"/>${arc}</svg><div class="ring-in">${inner}</div></div>`;
+}
+const statusLine=d=>({live:['Collecting now',`Started ${d.date}, ${d.time}`],scheduled:[`Starts ${d.date}, ${d.time}`,`Run ${d.run}`],done:['All houses collected',`Finished run ${d.run}`]})[d.status];
+
+const V=[
+{name:'Refined classic',note:'Your current card, cleaned up: a real title, a thicker progress bar and one clear main button.',r:d=>`
+<article class="card v1"><div class="pad">
+  <div class="v1-top"><div><div class="v1-title">Route ${d.route}</div><div class="v1-sub">${ic('home',15)}${d.category}, ${d.waste}</div></div>${pill(d)}</div>
+  <span class="zone">${d.zone}</span>
+  <div class="v1-prog"><div class="v1-pl"><b class="num">${d.houses}</b><span class="muted"> of ${d.total} houses</span></div><div class="v1-kg num">${d.kgs} kg</div></div>
+  ${bar(d,10)}
+  <div class="v1-info">${infoRows(d)}</div>
+  ${alertBox(d)}
+</div><div class="v1-act">${btnP(d)}${btnMore()}</div></article>`},
+
+{name:'Progress ring',note:'How far along the trip is reads at a glance, even from arm’s length.',r:d=>`
+<article class="card v2"><div class="pad">
+  <div class="v2-head">${ring(d.p,96,10,d.S.c,`<div><b class="num">${d.houses}</b><small>of ${d.total}</small></div>`)}
+    <div class="v2-right"><span class="v2-title">Route ${d.route}</span>${pill(d)}<span class="v2-kg num">${ic('weight',16)}${d.kgs} kg collected</span></div></div>
+  <div class="v2-meta">${ic('home',15)}${d.category}, ${d.waste}<span class="zone">${d.zone}</span></div>
+  <div class="chips">${`<span class="chip">${ic('clock',15)}${d.date}, ${d.time}</span><span class="chip">${ic('repeat',15)}Run ${d.run}</span>`}<span class="chip">${ic('user',15)}${d.driver}</span>${plate(d,13)}</div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnActions()}</div>
+</div></article>`},
+
+{name:'Status rail',note:'For supervisors scanning many trips. The coloured edge signals status before any words are read.',r:d=>`
+<article class="card v3" style="--rail:${d.alert?'var(--warn)':d.S.c}"><div class="v3-in">
+  <div class="row-between"><div class="v3-title">Route ${d.route} <span class="faint">Run ${d.run}</span></div><span class="v3-status" style="color:${d.S.c}"><i style="background:${d.S.c}"></i>${d.S.label}</span></div>
+  <div class="v3-meta muted">${d.category}, ${d.waste}<span class="zone">${d.zone}</span></div>
+  <div class="v3-prog">${bar(d,6)}<span class="v3-n num"><b>${d.houses}</b>/${d.total}</span><span class="v3-n num"><b>${d.kgs}</b> kg</span></div>
+  <div class="v3-foot"><span>${ic('clock',15)}${d.date}, ${d.time}</span>${plate(d,11)}<span>${ic('user',15)}${first(d.driver)}</span></div>
+  ${d.alert?`<div class="v3-alert">${ic('alert',16)}${d.alert}</div>`:''}
+</div><div class="v3-act"><button class="lnk">${ic(primary(d).icon,16)}${primary(d).label}</button><button class="lnk">${ic('more',16)}Actions</button></div></article>`},
+
+{name:'Status header',note:'Status, count and progress sit together in one bold colour band.',r:d=>`
+<article class="card v4"><div class="v4-head" style="background:${d.S.grad}">
+  <div class="row-between"><span class="v4-route">Route ${d.route}</span><span class="v4-pill"><i></i>${d.S.label}</span></div>
+  <div class="v4-big num">${d.houses}<span> / ${d.total}</span></div>
+  <div class="v4-cap"><span>houses collected</span><b class="num">${d.kgs} kg</b></div>
+  <div class="v4-bar"><i style="width:${d.p}%;min-width:${d.p>0?8:0}px"></i></div>
+</div><div class="pad">
+  <div class="v4-meta">${d.category}, ${d.waste}<span class="zone">${d.zone}</span></div>
+  <div class="v4-grid">${infoRows(d)}</div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`},
+
+{name:'Number plate first',note:'Drivers find their own truck instantly by its real-looking plate.',r:d=>`
+<article class="card v5"><div class="v5-top">
+  <div class="v5-truck">${ic('truck',28)}</div>${plate(d,24)}
+  <div class="v5-driver">${avatar(d.driver,28)}<span>${d.driver}</span></div>
+</div><div class="pad">
+  <div class="row-between"><div><div class="v5-route">Route ${d.route} <span class="faint">Run ${d.run}</span></div><div class="muted sm">${d.category}, ${d.waste}</div></div>${pill(d)}</div>
+  <div class="v5-prog">${bar(d,10)}<div class="row-between sm"><span><b class="num">${d.houses}</b> of ${d.total} houses</span><span class="num"><b>${d.kgs}</b> kg</span></div></div>
+  <div class="v5-time">${ic('clock',16)}${d.date}, ${d.time}<span class="zone">${d.zone}</span></div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`},
+
+{name:'House dots',note:'Each dot is one house, so progress is visible without reading a number.',r:d=>`
+<article class="card v6"><div class="pad">
+  <div class="row-between"><div class="v6-title">Route ${d.route}</div>${pill(d)}</div>
+  <div class="muted sm v6-sub">${d.category}, ${d.waste}<span class="zone">${d.zone}</span></div>
+  <div class="v6-dots" style="--on:${d.S.c}" aria-label="${d.houses} of ${d.total} houses">${Array.from({length:d.total},(_,i)=>`<i${i<d.houses?' class="on"':''}></i>`).join('')}</div>
+  <div class="v6-leg"><span><i class="lg" style="background:${d.S.c}"></i><b class="num">${d.houses}</b> done</span><span><i class="lg"></i><b class="num">${d.left}</b> to go</span><span class="v6-kg">${ic('weight',15)}<b class="num">${d.kgs}</b> kg</span></div>
+  <div class="v6-info"><span class="chip">${ic('clock',15)}${d.date}, ${d.time}</span><span class="chip">${ic('repeat',15)}Run ${d.run}</span>${plate(d,13)}<span class="chip">${ic('user',15)}${d.driver}</span></div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`},
+
+{name:'Stat tiles',note:'The three numbers that matter, side by side.',r:d=>`
+<article class="card v7"><div class="pad">
+  <div class="row-between"><div><div class="v7-title">Route ${d.route}</div><div class="muted sm">${d.category}, ${d.waste}</div></div>${pill(d)}</div>
+  <div class="v7-tiles">
+    <div class="v7-tile">${ic('home',18)}<b class="num">${d.houses}<small>/${d.total}</small></b><span>Houses</span></div>
+    <div class="v7-tile">${ic('weight',18)}<b class="num">${d.kgs}</b><span>kg collected</span></div>
+    <div class="v7-tile">${ic('repeat',18)}<b class="num">${d.run}</b><span>Run</span></div>
+  </div>
+  ${bar(d,6)}
+  <div class="v1-info" style="margin-top:12px"><div class="info">${ic('clock',18)}<span>${d.date}, ${d.time}</span><span class="zone" style="margin-left:auto">${d.zone}</span></div><div class="info">${ic('truck',18)}${plate(d,13)}</div><div class="info">${ic('user',18)}<span>${d.driver}</span></div></div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnActions()}</div>
+</div></article>`},
+
+{name:'Trip journey',note:'A step tracker that shows exactly which stage the trip is stuck at.',r:d=>{
+  const S={approval:['done','pending','active','todo'],live:['done','done','active','todo'],scheduled:['done','done','todo','todo'],done:['done','done','done','done']}[d.key];
+  const L=['Assigned','Approved','Collecting','Completed'];
+  const icn={done:ic('check',16),pending:ic('hourglass',15),active:'',todo:''};
+  const cap={approval:'Collection has started, but the assignment still needs approval.',live:`Collecting now. ${d.left} houses to go.`,scheduled:`Starts ${d.date} at ${d.time}.`,done:`All ${d.total} houses collected.`}[d.key];
+  return `<article class="card v8"><div class="pad">
+  <div class="row-between"><div><div class="v8-title">Route ${d.route} <span class="faint">Run ${d.run}</span></div><div class="muted sm">${d.category}, ${d.waste}</div></div>${plate(d,12)}</div>
+  <div class="v8-steps">${S.map((s,i)=>`<div class="st st-${s}${s!=='todo'?' on':''}"><span class="st-dot">${icn[s]}</span><span class="st-l">${L[i]}</span></div>`).join('')}</div>
+  <div class="v8-cap">${cap}</div>
+  <div class="v8-mini"><span>${ic('home',15)}<b class="num">${d.houses}</b>/${d.total} houses</span><span>${ic('weight',15)}<b class="num">${d.kgs}</b> kg</span><span>${ic('user',15)}${d.driver}</span></div>
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`}},
+
+{name:'Live map',note:'Location comes first, with the collected part of the route drawn solid.',r:d=>{
+  const pts=[[18,104],[70,104],[70,70],[130,70],[130,34],[192,34],[192,86],[252,86],[252,50],[302,50]];
+  const L=[];let tot=0;for(let i=1;i<pts.length;i++){const l=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);L.push(l);tot+=l}
+  let t=tot*d.p/100,done=[pts[0]],pos=pts[0];
+  for(let i=1;i<pts.length;i++){if(t>=L[i-1]){t-=L[i-1];done.push(pts[i]);pos=pts[i]}else{const f=t/L[i-1];pos=[pts[i-1][0]+(pts[i][0]-pts[i-1][0])*f,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*f];done.push(pos);break}}
+  const P=a=>a.map(p=>p.join(',')).join(' ');
+  const streets=[[0,34,320,34],[0,70,320,70],[0,104,320,104],[0,86,320,86],[0,50,320,50],[70,0,70,124],[130,0,130,124],[192,0,192,124],[252,0,252,124],[30,0,30,124],[290,0,290,124]];
+  return `<article class="card v9"><div class="v9-map"><svg viewBox="0 0 320 124" aria-hidden="true">
+    <rect width="320" height="124" style="fill:var(--map-bg)"/>
+    <ellipse cx="222" cy="112" rx="40" ry="18" style="fill:var(--map-park)"/><ellipse cx="100" cy="16" rx="26" ry="14" style="fill:var(--map-park)"/>
+    ${streets.map(s=>`<line x1="${s[0]}" y1="${s[1]}" x2="${s[2]}" y2="${s[3]}" style="stroke:var(--map-st)" stroke-width="7"/>`).join('')}
+    <polyline points="${P(pts)}" fill="none" style="stroke:var(--ink3)" stroke-width="3" stroke-dasharray="2 6" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="${P(done)}" fill="none" style="stroke:${d.S.c}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="5" style="fill:var(--card);stroke:${d.S.c}" stroke-width="3"/>
+    <g transform="translate(296,36)" style="color:var(--ink)"><path d="M3 18V2h10l-2 3 2 3H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></g>
+    <circle cx="${pos[0]}" cy="${pos[1]}" r="14" style="fill:${d.S.c}" opacity=".22"/>
+    <circle cx="${pos[0]}" cy="${pos[1]}" r="10.5" style="fill:${d.S.c};stroke:var(--card)" stroke-width="2.5"/>
+    <g transform="translate(${pos[0]-6.6},${pos[1]-6.6}) scale(.55)" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5h11.5v10H2.5z"/><path d="M14 9h4l3.5 3.5v3H14"/></g>
+  </svg>
+  <span class="v9-chip"><i style="background:${d.S.c}"></i>${d.S.label}</span><span class="v9-chip v9-chip2 num">${d.houses}/${d.total} houses</span></div>
+  <div class="pad">
+    <div class="row-between"><div class="v9-title">Route ${d.route} <span class="faint">Run ${d.run}</span></div><span class="num" style="font-weight:700">${d.kgs} kg</span></div>
+    <div class="v9-row"><span>${ic('clock',15)}${d.date}, ${d.time}</span>${plate(d,12)}<span>${ic('user',15)}${d.driver}</span></div>
+    ${alertBox(d)}
+    <div class="btn-row">${btnP(d)}${btnMore()}</div>
+  </div></article>`}},
+
+{name:'Driver first',note:'For supervisors: the person is the headline and calling them takes one tap.',r:d=>`
+<article class="card v10"><div class="pad">
+  <div class="v10-drv">${avatar(d.driver,52)}<div class="v10-dn"><b>${d.driver}</b>${plate(d,12)}</div><button class="v10-call" aria-label="Call driver">${ic('phone',21)}</button></div>
+  <div class="hr"></div>
+  <div class="row-between"><div><div class="v10-route">Route ${d.route}</div><div class="muted sm">${d.category}, ${d.waste}</div></div>${pill(d)}</div>
+  <div class="v10-prog">${bar(d,10)}<div class="row-between sm"><span><b class="num">${d.houses}</b> of ${d.total} houses</span><span class="num"><b>${d.kgs}</b> kg</span></div></div>
+  <div class="v10-time muted sm">${ic('clock',15)}${d.date}, ${d.time}, run ${d.run}<span class="zone">${d.zone}</span></div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`},
+
+{name:'Compact row',note:'Fits 6 to 8 trips on one screen; tap a row to open the full card.',r:d=>{
+  const row=x=>`<article class="card v11"><div class="v11-row">${ring(x.p,46,5,x.S.c,`<span class="v11-pc num">${Math.round(x.p)}%</span>`)}<div class="v11-mid"><div class="v11-t">Route ${x.route} <span class="faint">Run ${x.run}</span></div><div class="v11-s muted"><span style="white-space:nowrap">${x.time}, ${x.date}</span>${plate(x,10)}</div></div><div class="v11-r"><b class="num">${x.houses}/${x.total}</b><span class="muted num">${x.kgs} kg</span></div>${ic('chevr',18)}</div>${x.alert?`<div class="v11-alert">${ic('alert',14)}${x.alert}</div>`:''}</article>`;
+  const other=prep({...STATES[d.key==='scheduled'?'live':'scheduled'],key:'x',route:'C',run:2});
+  return `<div class="v11-list">${row(d)}<div class="v11-ghost">${row(other)}</div></div>`}},
+
+{name:'Issue first',note:'Problems jump to the top with a button to act on them right there.',r:d=>{
+  const [t,sub]=statusLine(d);
+  const band=d.alert?{bg:'var(--warn-soft)',c:'var(--warn-ink)',i:'hourglass',t:d.alert,sub:'Collection continues while this waits',act:'Remind'}:{bg:d.S.s,c:d.S.c,i:d.S.icon,t,sub};
+  return `<article class="card v12"><div class="v12-band" style="background:${band.bg};color:${band.c}"><span class="v12-ic">${ic(band.i,21)}</span><div><b>${band.t}</b><small>${band.sub}</small></div>${band.act?`<button class="v12-btn">${band.act}</button>`:''}</div>
+  <div class="pad">
+    <div class="row-between"><div><div class="v12-title">Route ${d.route}</div><div class="muted sm">${d.category}, ${d.waste}</div></div><span class="zone">${d.zone}</span></div>
+    <div class="v1-prog"><div class="v1-pl"><b class="num">${d.houses}</b><span class="muted"> of ${d.total} houses</span></div><div class="v1-kg num">${d.kgs} kg</div></div>
+    ${bar(d,8)}
+    <div class="v12-grid"><div class="info">${ic('clock',17)}${d.time}, ${d.date}</div><div class="info">${ic('repeat',17)}Run ${d.run}</div><div class="info">${ic('user',17)}${d.driver}</div><div class="info">${plate(d,12)}</div></div>
+    <div class="btn-row">${btnP(d)}${btnMore()}</div>
+  </div></article>`}},
+
+{name:'Night shift',note:'A glowing dark style for dashboards, wall screens and early-morning shifts.',r:d=>`
+<article class="card v13"><div class="pad">
+  <div class="row-between"><div><div class="v13-route">Route ${d.route}</div><div class="v13-sub">${d.category}, ${d.waste}, ${d.zone}</div></div><span class="v13-pill" style="color:${d.S.glow}"><i style="background:${d.S.glow}"></i><span style="color:#EEF0FF">${d.S.label}</span></span></div>
+  <div class="v13-big num">${d.houses}<span> / ${d.total}</span></div>
+  <div class="v13-cap"><span>houses collected</span><b class="num">${d.kgs} kg</b></div>
+  <div class="v13-bar"><i style="width:${d.p}%;min-width:${d.p>0?8:0}px"></i></div>
+  <div class="v13-chips"><span>${ic('clock',14)}${d.date}, ${d.time}</span><span>${ic('repeat',14)}Run ${d.run}</span><span>${ic('user',14)}${d.driver}</span>${plate(d,12)}</div>
+  ${d.alert?`<div class="v13-alert">${ic('alert',18)}${d.alert}</div>`:''}
+  <div class="btn-row">${btnP(d,'v13-p')}<button class="btn btn-icon v13-s" aria-label="More actions">${ic('more',20)}</button></div>
+</div></article>`},
+
+{name:'Truck on the road',note:'Progress drawn as a journey, with the truck moving along the road.',r:d=>`
+<article class="card v14"><div class="pad">
+  <div class="row-between"><div><div class="v14-title">Route ${d.route} <span class="faint">Run ${d.run}</span></div><div class="muted sm">${d.category}, ${d.waste}</div></div>${pill(d)}</div>
+  <div class="v14-road"><div class="v14-done" style="width:${d.p}%;background:${d.S.c}"></div><div class="v14-lane"></div><div class="v14-truck" style="left:clamp(4px, calc(${d.p}% - 22px), calc(100% - 48px))">${ic('truck',22)}</div></div>
+  <div class="v14-ends"><span>${ic('pin',14)}Start</span><span class="mid num"><b>${d.houses}</b> of ${d.total} houses, <b>${d.kgs}</b> kg</span><span>${ic('flag',14)}End</span></div>
+  <div class="v1-info" style="margin-top:12px"><div class="info">${ic('clock',18)}<span>${d.date}, ${d.time}</span><span class="zone" style="margin-left:auto">${d.zone}</span></div><div class="info">${ic('truck',18)}${plate(d,13)}<span class="muted" style="margin-left:auto">${d.driver}</span></div></div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`},
+
+{name:'Trip ticket',note:'Route and run sit on a tear-off stub, like a bus or boarding pass.',r:d=>`
+<article class="card v15"><div class="v15-main">
+  <div class="v15-stub" style="background:${d.S.grad}"><span>Route</span><b>${d.route}</b><span>Run ${d.run}</span></div>
+  <div class="v15-body">
+    <div class="row-between"><span class="muted sm">${d.category}, ${d.waste}</span></div>
+    <div>${pill(d)}<span class="zone">${d.zone}</span></div>
+    <div class="row-between sm" style="margin-top:4px"><span><b class="num">${d.houses}</b> of ${d.total} houses</span></div>
+    ${bar(d,6)}
+    <div class="v15-kv"><div><span>Date</span><b>${d.date}</b></div><div><span>Time</span><b class="num">${d.time}</b></div><div><span>Weight</span><b class="num">${d.kgs} kg</b></div></div>
+  </div></div>
+  <div class="v15-tear"></div>
+  <div class="pad v15-low">
+    <div class="v15-who">${plate(d,13)}<span>${avatar(d.driver,26)}${d.driver}</span></div>
+    ${alertBox(d)}
+    <div class="btn-row">${btnP(d)}${btnMore()}</div>
+  </div></article>`},
+
+{name:'Picture first',note:'Built for users who can’t read well: big icons and colours carry the meaning, and buttons are extra large.',r:d=>`
+<article class="card v16"><div class="pad">
+  <div class="v16-status" style="--c:${d.S.c};--s:${d.S.s}"><span class="v16-sic">${ic(d.S.icon,32)}</span><div><b>${d.S.label}</b><span class="muted">Route ${d.route}, run ${d.run}</span></div></div>
+  <div class="v16-grid">
+    <div class="v16-t"><span class="v16-i" style="background:var(--live-soft);color:var(--live)">${ic('home',24)}</span><b class="num">${d.houses}<small>/${d.total}</small></b></div>
+    <div class="v16-t"><span class="v16-i" style="background:var(--ok-soft);color:var(--ok)">${ic('weight',24)}</span><b class="num">${d.kgs}<small> kg</small></b></div>
+    <div class="v16-t"><span class="v16-i" style="background:var(--accent-soft);color:var(--accent)">${ic('clock',24)}</span><b class="num">${d.time}</b></div>
+    <div class="v16-t"><span class="v16-i" style="background:var(--idle-soft);color:var(--idle)">${ic('repeat',24)}</span><b class="num">${d.run}</b></div>
+    <div class="v16-t v16-wide"><span class="v16-i" style="background:var(--warn-soft);color:var(--warn)">${ic('truck',24)}</span>${plate(d,15)}<span class="v16-drv">${avatar(d.driver,30)}</span></div>
+  </div>
+  ${d.alert?`<div class="v16-alert">${ic('hourglass',30)}<b>Waiting for approval</b></div>`:''}
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`},
+
+{name:'Bento',note:'A modern tiled layout led by one big progress number.',r:d=>`
+<article class="card v17"><div class="pad">
+  <div class="row-between"><div><div class="v17-title">Route ${d.route}</div><div class="muted sm">${d.category}, ${d.waste}</div></div>${pill(d)}</div>
+  <div class="v17-bento">
+    <div class="v17-b v17-big"><div><b class="num" style="color:${d.S.c}">${d.houses}</b><small>of ${d.total} houses</small></div>${bar(d,6)}</div>
+    <div class="v17-b"><div class="lbl">${ic('weight',14)}Weight</div><div class="val num">${d.kgs} kg</div></div>
+    <div class="v17-b"><div class="lbl">${ic('clock',14)}${d.date}</div><div class="val num">${d.time} <span class="faint" style="font-size:13px;font-weight:600">Run ${d.run}</span></div></div>
+    <div class="v17-b v17-wide">${plate(d,13)}<span>${avatar(d.driver,26)}${d.driver}</span></div>
+  </div>
+  ${alertBox(d)}
+  <div class="btn-row">${btnP(d)}${btnMore()}</div>
+</div></article>`},
+
+{name:'Filling card',note:'The card itself fills with colour as houses are collected.',r:d=>`
+<article class="card v18"><div class="v18-top"><div class="v18-fill" style="width:${d.p}%;background:${d.S.s};${d.p>0&&d.p<100?`border-right:3px solid ${d.S.c}`:''}"></div>
+  <div class="v18-c"><div class="row-between"><span class="v18-route">Route ${d.route} <span class="faint">Run ${d.run}</span></span>${pill(d)}</div>
+  <div class="v18-pct num" style="color:${d.S.c}">${Math.round(d.p)}<small>%</small></div>
+  <div class="muted num">${d.houses} of ${d.total} houses, ${d.kgs} kg</div></div></div>
+  <div class="pad"><div class="v18-info">${infoRows(d)}</div>${alertBox(d)}<div class="btn-row">${btnP(d)}${btnMore()}</div></div></article>`},
+
+{name:'Material 3 native',note:'Built only from standard Flutter widgets, so it’s the fastest to ship.',r:d=>`
+<article class="card v19"><div class="pad">
+  <div class="row-between" style="align-items:flex-start"><div><div class="v19-over">${d.category}</div><div class="v19-h">Route ${d.route}</div><div class="v19-sub muted">${d.waste}, ${d.zone}</div></div><span class="v19-ast" style="color:${d.S.c}">${ic(d.S.icon,17)}${d.S.label}</span></div>
+  <div class="v19-track">${d.p>0?`<span class="a" style="width:${d.p}%;min-width:6px;background:var(--accent)"></span>`:''}${d.p<100?'<span class="r"></span>':''}</div>
+  <div class="v19-nums"><span><b class="num">${d.houses}</b> of ${d.total} houses</span><b class="num">${d.kgs} kg</b></div>
+  <div class="v19-chips"><span class="v19-chip">${ic('clock',16)}${d.date}, ${d.time}</span><span class="v19-chip">${ic('repeat',16)}Run ${d.run}</span><span class="v19-chip">${ic('truck',16)}${d.plateTxt}</span><span class="v19-chip">${ic('user',16)}${d.driver}</span></div>
+  ${d.alert?`<div class="v19-banner">${ic('alert',20)}<span>${d.alert}</span><button>Details</button></div>`:''}
+  <div class="v19-btns">${btnP(d,'btn-tonal')}${btnActions('btn-line')}</div>
+</div></article>`},
+
+{name:'Editorial',note:'Quiet and typographic, with one big route letter and hairline structure.',r:d=>`
+<article class="card v20">
+  <div class="v20-grid"><div class="v20-letter">${d.route}</div><div class="v20-r"><span class="v20-st" style="color:${d.S.c}"><i style="background:${d.S.c}"></i>${d.S.label}</span><div class="v20-cat">${d.category}<br>${d.waste}</div><div class="v20-zone faint">${d.zone}</div></div></div>
+  <div class="v20-rule"></div>
+  <div class="v20-stats"><div><b class="num">${d.houses}<span>/${d.total}</span></b><small>houses</small></div><div><b class="num">${d.kgs}</b><small>kg</small></div><div><b class="num">${d.time}</b><small>${d.date}, run ${d.run}</small></div></div>
+  ${bar(d,3,'var(--ink)')}
+  <div class="v20-who"><span>${d.driver}</span><span class="num">${d.plateTxt}</span></div>
+  ${d.alert?`<div class="v20-alert">${ic('alert',16)}${d.alert}</div>`:''}
+  <div class="v20-act" style="margin-top:12px"><button class="lnk">${ic(primary(d).icon,16)}${primary(d).label}</button><button class="lnk" style="margin-left:auto">${ic('more',16)}Actions</button></div>
+</article>`},
+
+{name:'Expandable',note:'Short by default and opens itself when something needs attention. Tap the arrow to try it.',r:d=>`
+<details class="card v21"${d.alert?' open':''}><summary>${ring(d.p,48,5,d.S.c,`<b class="num">${Math.round(d.p)}%</b>`)}
+  <div class="v21-mid"><div class="v21-t">Route ${d.route} <span class="v20-st" style="color:${d.S.c}"><i style="background:${d.S.c}"></i>${d.S.label}</span></div><div class="v21-s num">${d.houses} of ${d.total} houses, ${d.kgs} kg</div></div><span class="v21-chev">${ic('chev',18)}</span></summary>
+  <div class="v21-hint">Tap to see vehicle, driver and actions</div>
+  <div class="v21-body"><div class="muted sm" style="margin-top:12px">${d.category}, ${d.waste}<span class="zone">${d.zone}</span></div><div class="v1-info">${infoRows(d)}</div>${alertBox(d)}<div class="btn-row">${btnP(d)}${btnMore()}</div></div>
+</details>`},
+
+{name:'Action dock',note:'Every action is visible as a labelled icon, with no hidden menu.',r:d=>{
+  const p=primary(d);
+  const items=[{i:p.icon,l:d.status==='done'?'Route':'Track',bg:'var(--accent)',c:'var(--on-accent)'},{i:'phone',l:'Call',bg:'var(--ok-soft)',c:'var(--ok)'},d.alert?{i:'bell',l:'Remind',bg:'var(--warn-soft)',c:'var(--warn)'}:{i:'eye',l:'Details',bg:'var(--idle-soft)',c:'var(--idle)'},{i:'more',l:'More',bg:'var(--idle-soft)',c:'var(--idle)'}];
+  return `<article class="card v22"><div class="pad">
+    <div class="row-between"><div><div class="v22-title">Route ${d.route} <span class="faint">Run ${d.run}</span></div><div class="muted sm">${d.category}, ${d.waste}</div></div>${pill(d)}</div>
+    <div class="v1-prog"><div class="v1-pl"><b class="num">${d.houses}</b><span class="muted"> of ${d.total} houses</span></div><div class="v1-kg num">${d.kgs} kg</div></div>
+    ${bar(d,8)}
+    <div class="v22-info"><div class="info">${ic('clock',18)}<span>${d.date}, ${d.time}</span><span class="zone" style="margin-left:auto">${d.zone}</span></div><div class="info">${ic('truck',18)}${plate(d,13)}<span class="muted" style="margin-left:auto">${d.driver}</span></div></div>
+    ${alertBox(d)}
+  </div><div class="v22-dock">${items.map(x=>`<button><span style="background:${x.bg};color:${x.c}">${ic(x.i,22)}</span>${x.l}</button>`).join('')}</div></article>`}}
+];
+
+function prep(s){
+  const d={...BASE,...s};
+  d.p=d.houses/d.total*100; d.S=STATUS[d.status]; d.left=d.total-d.houses;
+  d.kgs=d.kg===0?'0':(Number.isInteger(d.kg)?String(d.kg):d.kg.toFixed(1));
+  const m=d.vehicle.match(/^([A-Z]{2})(\d{1,2})([A-Z]{1,3})(\d{1,4})$/); d.plateTxt=m?`${m[1]} ${m[2]} ${m[3]} ${m[4]}`:d.vehicle;
+  return d;
+}
+let cur='approval';
+function render(){
+  const d=prep({...STATES[cur],key:cur});
+  document.getElementById('grid').innerHTML=V.map((v,i)=>`<section class="cell"><header class="cell-h"><span class="no">${i+1}</span><div><h2>${v.name}</h2><p>${v.note}</p></div></header><div class="stage">${v.r(d)}</div></section>`).join('');
+  document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.s===cur));
+}
+document.getElementById('seg').innerHTML=Object.entries(STATES).map(([k,s])=>`<button data-s="${k}"><i style="background:${s.dot}"></i>${s.name}</button>`).join('');
+document.getElementById('seg').addEventListener('click',e=>{const b=e.target.closest('button');if(b){cur=b.dataset.s;render()}});
+render();
+</script>
+</body></html>

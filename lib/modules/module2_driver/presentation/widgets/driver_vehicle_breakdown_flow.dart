@@ -125,7 +125,9 @@ class _DriverAssignmentPickerSheetState
       final assignments = await _tripRepo.fetchMyTripsToday();
       if (!mounted) return;
       setState(() {
-        _assignments = assignments;
+        // A breakdown only makes sense on a trip that's still live; the
+        // backend refuses Completed / Cancelled ones.
+        _assignments = assignments.where((a) => a.isLive).toList();
         _loading = false;
       });
     } catch (e) {
@@ -212,7 +214,7 @@ class _DriverAssignmentPickerSheetState
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: Text(
-          'No trips assigned to you today.',
+          'No scheduled or in-progress trips today.',
           style: TextStyle(color: CaptainTheme.mutedText),
         ),
       );

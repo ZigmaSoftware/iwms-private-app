@@ -69,11 +69,18 @@ class TripRetripRequest {
     required this.livePendingBins,
     required this.livePendingHouseholds,
     this.createdAt,
+    this.expiresAt,
+    this.reminderSentAt,
+    this.escalatedAt,
+    this.reasonCodeLabel = '',
+    this.panchayatName = '',
+    this.zoneName = '',
+    this.wardName = '',
   });
 
   final String uniqueId;
   final String assignmentUniqueId;
-  final String status; // Pending | Approved | Rejected
+  final String status; // Pending | Approved | Rejected | Expired
   final String reason;
   // Snapshot counts taken when the request was raised — the audit record of
   // what was outstanding then, not necessarily what's outstanding now.
@@ -92,17 +99,54 @@ class TripRetripRequest {
   final List<RetripPendingStop> livePendingBins;
   final List<RetripPendingStop> livePendingHouseholds;
   final DateTime? createdAt;
+  final DateTime? expiresAt;
+  final DateTime? reminderSentAt;
+  final DateTime? escalatedAt;
+
+  /// The driver's reason category ("Vehicle full", "Other", …); empty on
+  /// requests raised before categories existed.
+  final String reasonCodeLabel;
+  final String panchayatName;
+  final String zoneName;
+
+  /// Comma-joined when the trip covers several wards.
+  final String wardName;
+
+  /// "Panchayat · Zone · Ward", skipping levels the trip doesn't have.
+  String get locationLabel => [panchayatName, zoneName, wardName]
+      .where((part) => part.isNotEmpty)
+      .join(' · ');
 
   bool get isPending => status == 'Pending';
+  bool get isExpired => status == 'Expired';
+
+  Duration? remaining([DateTime? now]) {
+    if (!isPending || expiresAt == null) return null;
+    final value = expiresAt!.difference(now ?? DateTime.now());
+    return value.isNegative ? Duration.zero : value;
+  }
+
+  bool get isLocallyExpired =>
+      isPending && expiresAt != null && !expiresAt!.isAfter(DateTime.now());
+
+  String expiryLabel([DateTime? now]) {
+    if (isExpired) return 'Expired';
+    final value = remaining(now);
+    if (value == null) return '';
+    if (value == Duration.zero) return 'Expired';
+    final minutes = (value.inSeconds / 60).ceil();
+    return 'Expires in $minutes min';
+  }
 
   bool get isHousehold =>
       (collectionType ?? '').contains('household') ||
       (collectionType ?? '').contains('bulk');
 
-  /// The stops relevant to this request's type — households for a
-  /// household/bulk trip, collection points for a bin trip.
+  /// Every pending stop, bins and households alike. A trip can hold both,
+  /// and approval marks any pending stop left out of `collection_point_ids`
+  /// as Missed, so the review must offer all of them.
   List<RetripPendingStop> get liveStops =>
-      isHousehold ? livePendingHouseholds : livePendingBins;
+      [...livePendingBins, ...livePendingHouseholds];
 
   int get snapshotPendingTotal => pendingBinCount + pendingHouseholdCount;
 
@@ -147,6 +191,13 @@ class TripRetripRequest {
       livePendingBins: bins,
       livePendingHouseholds: households,
       createdAt: _date(json['created_at']),
+      expiresAt: _date(json['expires_at']),
+      reminderSentAt: _date(json['reminder_sent_at']),
+      escalatedAt: _date(json['escalated_at']),
+      reasonCodeLabel: _str(json['reason_code_label']),
+      panchayatName: _str(json['panchayat_name']),
+      zoneName: _str(json['zone_name']),
+      wardName: _str(json['ward_name']),
     );
   }
 }

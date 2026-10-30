@@ -1,7 +1,8 @@
 String _str(dynamic v) => v == null ? '' : v.toString().trim();
 
 /// An in-app notification for a driver/operator/supervisor login — vehicle
-/// replacement approval/rejection, team reassignment, or substitution.
+/// replacement approval/rejection, delays, re-trips, team reassignment, or
+/// substitution.
 /// Shared by the driver and supervisor apps (same backend endpoint).
 class StaffNotification {
   const StaffNotification({

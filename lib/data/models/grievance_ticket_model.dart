@@ -40,14 +40,34 @@ class GrievanceTicket extends Equatable {
   final String? priorityCode;
   final String? statusCode;
   final String? statusName;
-  final String? assignedTeamName;
   final String? assignedStaffName;
-  final String? assignedDepartmentName;
+
+  /// Whether the ticket has escalated past its first assignee. Set by the
+  /// backend's SLA sweep as well as by a manual escalate.
+  final bool isEscalated;
+
+  /// Who the ticket currently sits with once escalated — null while it is
+  /// still with [assignedStaffName].
+  final String? escalatedToStaffName;
+
+  /// Current hop in the project's staff hierarchy (0 = first assignee).
+  final int escalationLevel;
+
+  /// Human role name for [escalationLevel], e.g. "Supervisor". Resolved by
+  /// the backend from the project's staff hierarchy, so the app never has to
+  /// know how a given project is structured.
+  final String? escalationLevelName;
+
   final String? locationText;
   final String? waPhone;
   final String? customerName;
   final DateTime? createdAt;
-  final DateTime? slaDueAt;
+
+  /// Deadline for the current [escalationLevel]. Past this and unresolved,
+  /// the backend auto-escalates to the next level. Null once resolved/closed
+  /// or at the top of the hierarchy, where there is no further deadline.
+  final DateTime? nextEscalationDueAt;
+
   final List<GrievanceTimelineEvent> timeline;
 
   const GrievanceTicket({
@@ -60,19 +80,45 @@ class GrievanceTicket extends Equatable {
     this.priorityCode,
     this.statusCode,
     this.statusName,
-    this.assignedTeamName,
     this.assignedStaffName,
-    this.assignedDepartmentName,
+    this.isEscalated = false,
+    this.escalatedToStaffName,
+    this.escalationLevel = 0,
+    this.escalationLevelName,
     this.locationText,
     this.waPhone,
     this.customerName,
     this.createdAt,
-    this.slaDueAt,
+    this.nextEscalationDueAt,
     this.timeline = const [],
   });
 
-  bool get isFinal =>
-      const {'RESOLVED', 'CLOSED', 'REJECTED', 'CANCELLED'}.contains(statusCode);
+  bool get isFinal => const {'RESOLVED', 'CLOSED', 'REJECTED', 'CANCELLED'}
+      .contains(statusCode);
+
+  /// The staff member actually responsible right now. Once a ticket has
+  /// escalated it sits with [escalatedToStaffName]; before that, with the
+  /// person it was first assigned to.
+  String? get handlerName => escalatedToStaffName ?? assignedStaffName;
+
+  /// Role currently holding the ticket, e.g. "Supervisor". Falls back to null
+  /// rather than a guess when the project has no hierarchy configured.
+  String? get handlerRole => escalationLevelName;
+
+  /// Time left before the backend escalates this to the next level. Negative
+  /// once the deadline has passed; null when there is no deadline (resolved,
+  /// closed, or already at the top of the hierarchy).
+  Duration? get timeToEscalation {
+    if (nextEscalationDueAt == null || isFinal) return null;
+    return nextEscalationDueAt!.difference(DateTime.now());
+  }
+
+  /// Whether this ticket has blown its current level's deadline and is due to
+  /// escalate on the backend's next sweep.
+  bool get isEscalationOverdue {
+    final remaining = timeToEscalation;
+    return remaining != null && remaining.isNegative;
+  }
 
   factory GrievanceTicket.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic v) =>
@@ -88,22 +134,34 @@ class GrievanceTicket extends Equatable {
       priorityCode: json['priority_code']?.toString(),
       statusCode: json['status_code']?.toString(),
       statusName: json['status_name']?.toString(),
-      assignedTeamName: json['assigned_team_name']?.toString(),
       assignedStaffName: json['assigned_staff_name']?.toString(),
-      assignedDepartmentName: json['assigned_department_name']?.toString(),
+      isEscalated: json['is_escalated'] == true,
+      escalatedToStaffName: json['escalated_to_staff_name']?.toString(),
+      escalationLevel:
+          int.tryParse(json['escalation_level']?.toString() ?? '') ?? 0,
+      escalationLevelName: json['escalation_level_name']?.toString(),
       locationText: json['location_text']?.toString(),
       waPhone: json['wa_phone']?.toString(),
       customerName: json['customer_name']?.toString(),
       createdAt: parseDate(json['created']),
-      slaDueAt: parseDate(json['sla_due_at']),
+      nextEscalationDueAt: parseDate(json['next_escalation_due_at']),
       timeline: tl
-          .map((e) => GrievanceTimelineEvent.fromJson(e as Map<String, dynamic>))
+          .map(
+              (e) => GrievanceTimelineEvent.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }
 
   @override
-  List<Object?> get props => [uniqueId, ticketNo, statusCode, assignedTeamName];
+  List<Object?> get props => [
+        uniqueId,
+        ticketNo,
+        statusCode,
+        assignedStaffName,
+        escalatedToStaffName,
+        escalationLevel,
+        isEscalated,
+      ];
 }
 
 /// Category + priority choices for the citizen chat (from the `meta` endpoint).
@@ -199,15 +257,21 @@ class GrievanceMeta {
   });
 
   factory GrievanceMeta.fromJson(Map<String, dynamic> json) {
+    final categories = ((json['categories'] as List?) ?? const [])
+        .map((e) => GrievanceCategoryOption.fromJson(e as Map<String, dynamic>))
+        .where((category) => category.code != 'VEHICLE_ISSUE')
+        .toList();
+    final allowedIds = categories.map((category) => category.uniqueId).toSet();
     return GrievanceMeta(
-      categories: ((json['categories'] as List?) ?? const [])
-          .map((e) => GrievanceCategoryOption.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      categories: categories,
       subcategories: ((json['subcategories'] as List?) ?? const [])
-          .map((e) => GrievanceSubcategoryOption.fromJson(e as Map<String, dynamic>))
+          .map((e) =>
+              GrievanceSubcategoryOption.fromJson(e as Map<String, dynamic>))
+          .where((subcategory) => allowedIds.contains(subcategory.category))
           .toList(),
       priorities: ((json['priorities'] as List?) ?? const [])
-          .map((e) => GrievancePriorityOption.fromJson(e as Map<String, dynamic>))
+          .map((e) =>
+              GrievancePriorityOption.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }

@@ -22,6 +22,7 @@ Future<void> showWasteBreakdownWindow(
   required String title,
   required String subtitle,
   required List<WasteBreakdownRow> rows,
+  String? imageUrl,
 }) {
   final total = rows.fold<double>(0, (sum, r) => sum + r.weightKg);
 
@@ -111,6 +112,11 @@ Future<void> showWasteBreakdownWindow(
               ),
               const SizedBox(height: 6),
             ],
+            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _CollectionPhotoThumbnail(imageUrl: imageUrl),
+              const SizedBox(height: 10),
+            ],
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -123,6 +129,126 @@ Future<void> showWasteBreakdownWindow(
       ),
     ),
   );
+}
+
+/// Thumbnail of the collection's proof photo — tap to expand into a
+/// floating, zoomable full-size preview.
+class _CollectionPhotoThumbnail extends StatelessWidget {
+  const _CollectionPhotoThumbnail({required this.imageUrl});
+
+  final String imageUrl;
+
+  void _showFullImage(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CircularProgressIndicator(),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Icon(Icons.broken_image_outlined,
+                        size: 40, color: Colors.white70),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: -12,
+              right: -12,
+              child: Material(
+                color: Colors.white,
+                shape: const CircleBorder(),
+                elevation: 4,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.of(dialogContext).pop(),
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(Icons.close_rounded,
+                        size: 22, color: Colors.black87),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showFullImage(context),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            Image.network(
+              imageUrl,
+              width: double.infinity,
+              height: 120,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return Container(
+                  height: 120,
+                  alignment: Alignment.center,
+                  color: CaptainTheme.surface.withValues(alpha: 0.5),
+                  child: const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              },
+              errorBuilder: (_, __, ___) => Container(
+                height: 120,
+                alignment: Alignment.center,
+                color: CaptainTheme.surface.withValues(alpha: 0.5),
+                child: Icon(Icons.broken_image_outlined,
+                    size: 26, color: CaptainTheme.mutedText),
+              ),
+            ),
+            Positioned(
+              right: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.zoom_in_rounded,
+                    size: 16, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _WasteBreakdownTile extends StatelessWidget {

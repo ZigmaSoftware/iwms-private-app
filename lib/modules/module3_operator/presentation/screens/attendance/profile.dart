@@ -12,6 +12,7 @@ import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/data/repositories/face_config_repository.dart';
 
 class ProfilePage extends StatefulWidget {
   final String empId;
@@ -119,6 +120,17 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
     if (_submitting) return;
+
+    // Server-declared face setup: the backend chooses its engine in its own
+    // .env, so an outage there is reported here before the upload rather than
+    // after. Unreachable config falls back to permissive and does not block.
+    final faceConfig = await FaceConfigRepository().load();
+    if (!faceConfig.ready) {
+      _toast(faceConfig.reason?.trim().isNotEmpty == true
+          ? faceConfig.reason!
+          : "Face registration is unavailable right now. Please try again later.");
+      return;
+    }
 
     setState(() => _submitting = true);
     try {

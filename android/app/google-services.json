@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "512791466325",
-    "project_id": "iwmsgovernmentapp",
-    "storage_bucket": "iwmsgovernmentapp.firebasestorage.app"
+    "project_number": "186470882998",
+    "project_id": "iwmsprivateapp",
+    "storage_bucket": "iwmsprivateapp.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:512791466325:android:e24094afe52d479793dfdc",
+        "mobilesdk_app_id": "1:186470882998:android:208f3bb225730275289017",
         "android_client_info": {
           "package_name": "com.zigma.iwmsprivateapp"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBq2_sjWo6BIodHL8LX6yXrg2Rihg3ObI8"
+          "current_key": "AIzaSyACo70IOA6WR6zGspJ9Pime5Z8-WNcd15E"
         }
       ],
       "services": {

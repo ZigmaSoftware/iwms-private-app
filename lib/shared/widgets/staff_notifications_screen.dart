@@ -4,7 +4,8 @@ import 'package:iwms_private_app/data/models/staff_notification_models.dart';
 import 'package:iwms_private_app/data/repositories/staff_notification_repository.dart';
 
 /// In-app notification inbox shared by the driver and supervisor apps —
-/// vehicle replacement approval/rejection, team reassignment, substitution.
+/// vehicle replacement approval/rejection, delays, re-trips, team reassignment,
+/// substitution.
 /// Same backend feed (`schedule-operations/staff-notifications/`) scoped to
 /// whichever staff login is calling.
 ///
@@ -116,10 +117,29 @@ class _StaffNotificationsScreenState extends State<StaffNotificationsScreen> {
         return Icons.cancel_rounded;
       case 'VEHICLE_BREAKDOWN_REPORTED':
         return Icons.build_rounded;
+      case 'TRIP_DELAY_REPORTED':
+        return Icons.timer_rounded;
+      // A plan got no trip: its vehicle is under breakdown with no usable
+      // replacement (helpDoc 11-vehicle-breakdown.md, S6/S8).
+      case 'TRIP_NOT_SCHEDULED':
+        return Icons.event_busy_rounded;
+      case 'RETRIP_REQUESTED':
+        return Icons.route_rounded;
+      case 'RETRIP_APPROVED':
+        return Icons.check_circle_rounded;
+      case 'RETRIP_REJECTED':
+        return Icons.do_not_disturb_on_rounded;
+      case 'TICKET_ESCALATED_TO':
+      case 'TICKET_ESCALATED':
+        return Icons.report_problem_rounded;
       case 'TEAM_CHANGED':
         return Icons.groups_rounded;
       case 'TEAM_SUBSTITUTED':
         return Icons.swap_horiz_rounded;
+      case 'CUSTOMER_AVAILABLE':
+        return Icons.how_to_reg_rounded;
+      case 'TRIP_ASSIGNED':
+        return Icons.assignment_turned_in_rounded;
       default:
         return Icons.notifications_rounded;
     }

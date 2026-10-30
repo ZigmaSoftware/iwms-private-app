@@ -7,6 +7,7 @@ import 'package:iwms_private_app/modules/module5_supervisor/data/supervisor_repo
 import 'package:iwms_private_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/screens/supervisor_point_location_map_screen.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
+import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/customer_qr_template_card.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_cards.dart';
 import 'package:iwms_private_app/modules/module5_supervisor/presentation/widgets/supervisor_point_status_sheet.dart';
 
@@ -25,17 +26,25 @@ enum _HouseholdFilter { all, assigned, unassigned, serviced }
 class _SupervisorHouseholdsScreenState
     extends State<SupervisorHouseholdsScreen> {
   final SupervisorRepository _repo = SupervisorRepository();
+  final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
   String? _error;
   List<SupervisorHousehold> _items = const [];
   _HouseholdFilter _filter = _HouseholdFilter.all;
+  String _query = '';
   int _page = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -72,7 +81,7 @@ class _SupervisorHouseholdsScreenState
       body: BlocBuilder<SupervisorBloc, SupervisorState>(
         builder: (context, state) {
           final assignmentMap = _buildAssignmentMap(state.assignments);
-          final filtered = _applyFilter(_items, assignmentMap);
+          final filtered = _applySearch(_applyFilter(_items, assignmentMap));
           final summary = _buildSummary(_items, assignmentMap);
           final start = (_page * _kHouseholdPageSize).clamp(0, filtered.length);
           final end = (start + _kHouseholdPageSize).clamp(0, filtered.length);
@@ -98,6 +107,14 @@ class _SupervisorHouseholdsScreenState
                   filter: _filter,
                   onChanged: (value) => setState(() {
                     _filter = value;
+                    _page = 0;
+                  }),
+                ),
+                const SizedBox(height: 10),
+                _SearchField(
+                  controller: _searchController,
+                  onChanged: (value) => setState(() {
+                    _query = value;
                     _page = 0;
                   }),
                 ),
@@ -131,26 +148,7 @@ class _SupervisorHouseholdsScreenState
                         ),
                         onShowQr: item.qrCodeUrl.trim().isEmpty
                             ? null
-                            : () => _showQrDialog(
-                                  context,
-                                  title: item.name,
-                                  qrUrl: item.qrCodeUrl,
-                                  details: [
-                                    _DialogDetail(
-                                      label: 'Customer ID',
-                                      value: item.uniqueId,
-                                    ),
-                                    _DialogDetail(
-                                      label: 'Address',
-                                      value: item.address,
-                                    ),
-                                    if (item.contactNo.trim().isNotEmpty)
-                                      _DialogDetail(
-                                        label: 'Phone',
-                                        value: item.contactNo,
-                                      ),
-                                  ],
-                                ),
+                            : () => _showQrDialog(context, item: item),
                       ),
                     );
                   }),
@@ -208,6 +206,19 @@ class _SupervisorHouseholdsScreenState
         case _HouseholdFilter.serviced:
           return records.any((record) => record.stop.isCollected);
       }
+    }).toList();
+  }
+
+  List<SupervisorHousehold> _applySearch(List<SupervisorHousehold> items) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return items;
+    return items.where((item) {
+      return item.name.toLowerCase().contains(q) ||
+          item.customerId.toLowerCase().contains(q) ||
+          item.contactNo.toLowerCase().contains(q) ||
+          item.address.toLowerCase().contains(q) ||
+          item.wardName.toLowerCase().contains(q) ||
+          item.zoneName.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -289,19 +300,13 @@ class _SupervisorHouseholdsScreenState
 
   void _showQrDialog(
     BuildContext context, {
-    required String title,
-    required String qrUrl,
-    required List<_DialogDetail> details,
+    required SupervisorHousehold item,
   }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _QrDialog(
-        title: title,
-        qrUrl: _resolveMediaUrl(qrUrl),
-        details: details,
-      ),
+      builder: (_) => _QrDialog(item: item),
     );
   }
 }
@@ -328,6 +333,60 @@ class _HeaderSummary {
   final int assigned;
   final int unassigned;
   final int serviced;
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      cursorColor: SupervisorTheme.accent,
+      style: const TextStyle(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+        color: SupervisorTheme.strongText,
+      ),
+      decoration: InputDecoration(
+        hintText: 'Search customers',
+        hintStyle: const TextStyle(
+          fontWeight: FontWeight.w500,
+          color: SupervisorTheme.mutedText,
+        ),
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        isDense: true,
+        filled: true,
+        fillColor: SupervisorTheme.surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: SupervisorTheme.hairline.withValues(alpha: 0.6),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: SupervisorTheme.hairline.withValues(alpha: 0.6),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: SupervisorTheme.accent, width: 1.4),
+        ),
+      ),
+    );
+  }
 }
 
 class _StatusInfo {
@@ -650,22 +709,19 @@ class _HouseholdCard extends StatelessWidget {
   }
 }
 
+/// Bottom sheet showing the same door-sticker template the web admin prints
+/// from Daily Trip Plan / the Households list (see
+/// [CustomerQrTemplateCard]) — not a bare QR code.
 class _QrDialog extends StatelessWidget {
-  const _QrDialog({
-    required this.title,
-    required this.qrUrl,
-    required this.details,
-  });
+  const _QrDialog({required this.item});
 
-  final String title;
-  final String qrUrl;
-  final List<_DialogDetail> details;
+  final SupervisorHousehold item;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.84,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
       ),
       decoration: const BoxDecoration(
         color: SupervisorTheme.surface,
@@ -694,7 +750,7 @@ class _QrDialog extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    item.name,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -703,7 +759,7 @@ class _QrDialog extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   const Text(
-                    'QR details',
+                    'QR sticker — same as web',
                     style: TextStyle(
                       fontSize: 12.5,
                       color: SupervisorTheme.mutedText,
@@ -716,76 +772,50 @@ class _QrDialog extends StatelessWidget {
             Flexible(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                  20,
+                  32,
                   0,
-                  20,
+                  32,
                   20 + MediaQuery.viewPaddingOf(context).bottom,
                 ),
                 child: Column(
                   children: [
-                    Container(
-                      width: 190,
-                      height: 190,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: SupervisorTheme.cardBorder),
-                      ),
-                      child: Image.network(
-                        qrUrl,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Center(
-                          child: Icon(
-                            Icons.qr_code_rounded,
-                            size: 72,
-                            color: SupervisorTheme.mutedText,
-                          ),
-                        ),
-                      ),
+                    CustomerQrTemplateCard(
+                      household: item,
+                      qrImageUrl: _resolveMediaUrl(item.qrCodeUrl),
                     ),
-                    const SizedBox(height: 16),
-                    for (final detail in details)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border:
-                                Border.all(color: SupervisorTheme.cardBorder),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                detail.label,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: SupervisorTheme.mutedText,
-                                  letterSpacing: 0.2,
-                                ),
+                    if (item.contactNo.trim().isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: SupervisorTheme.cardBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.phone_rounded,
+                              size: 16,
+                              color: SupervisorTheme.mutedText,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              item.contactNo,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: SupervisorTheme.strongText,
+                                fontWeight: FontWeight.w700,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                detail.value,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: SupervisorTheme.strongText,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -795,16 +825,6 @@ class _QrDialog extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DialogDetail {
-  const _DialogDetail({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
 }
 
 class _ErrorCard extends StatelessWidget {

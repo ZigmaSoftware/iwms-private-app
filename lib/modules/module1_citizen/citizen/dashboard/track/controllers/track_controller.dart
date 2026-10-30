@@ -18,7 +18,7 @@ class TrackController extends ChangeNotifier {
   final NumberFormat weightFormatter = NumberFormat.decimalPattern();
   final NumberFormat averageFormatter = NumberFormat('#,##0.00');
 
-  WastePeriod selectedPeriod = WastePeriod.monthly;
+  WastePeriod selectedPeriod = WastePeriod.daily;
   DateTime selectedDate = DateTime.now();
   bool loading = false;
   String? error;

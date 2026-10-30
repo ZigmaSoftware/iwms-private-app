@@ -16,6 +16,7 @@ import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/track
 import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
 import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/notifications/widgets/notification_tile.dart';
 import 'package:iwms_private_app/localization/app_localizations.dart';
+import 'package:iwms_private_app/modules/module1_citizen/citizen/dashboard/home/widgets/today_pickup_card.dart';
 
 class HomeTab extends StatelessWidget {
   const HomeTab({
@@ -33,10 +34,10 @@ class HomeTab extends StatelessWidget {
     required this.secondaryTextColor,
     required this.highlightColor,
     required this.onStatsTap,
+    required this.onRefresh,
+    this.pickupRefresh,
   });
 
-
- 
   final BannerController bannerController;
   final TrackController trackController;
   final NotificationController notificationController;
@@ -50,6 +51,10 @@ class HomeTab extends StatelessWidget {
   final Color secondaryTextColor;
   final Color highlightColor;
   final VoidCallback onStatsTap;
+  final Future<void> Function() onRefresh;
+
+  /// Fires on pull-to-refresh so the "Today's pickup" card reloads.
+  final Listenable? pickupRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -59,98 +64,110 @@ class HomeTab extends StatelessWidget {
     final double bannerHeight = (headerHeight * 0.55).clamp(140, 190);
     final localizations = AppLocalizations.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _Header(
-          userName: userName,
-          showUserName: showUserName,
-          isDarkMode: isDarkMode,
-          highlightColor: highlightColor,
-          textColor: textColor,
-          secondaryTextColor: secondaryTextColor,
-          notificationController: notificationController,
-          localizations: localizations,
-        ),
-        const SizedBox(height: DashboardThemeTokens.spacing12),
-        AnimatedBuilder(
-          animation: bannerController,
-          builder: (context, _) {
-            final slides = bannerController.slides;
-            if (slides.isEmpty) {
-              return const SizedBox.shrink();
-            }
-            return BannerPager(
-              controller: bannerController.pageController,
-              slides: slides,
-              currentIndex: bannerController.currentIndex,
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Header(
+              userName: userName,
+              showUserName: showUserName,
               isDarkMode: isDarkMode,
-              pageViewHeight: bannerHeight,
-              onPageChanged: bannerController.onPageChanged,
-            );
-          },
-        ),
-        const SizedBox(height: DashboardThemeTokens.spacing12),
-        AnimatedBuilder(
-          animation: trackController,
-          builder: (context, _) {
-              final stats = _Stats.fromSummary(
-                trackController,
-                trackController.currentSummary,
-                localizations,
-              );
-            return Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: DashboardThemeTokens.spacing16,
-              ),
-              child: GestureDetector(
-                onTap: onStatsTap,
-                child: SectionCard(
-                  surfaceColor: surfaceColor,
-                  outlineColor: outlineColor,
+              highlightColor: highlightColor,
+              textColor: textColor,
+              secondaryTextColor: secondaryTextColor,
+              notificationController: notificationController,
+              localizations: localizations,
+            ),
+            const SizedBox(height: DashboardThemeTokens.spacing12),
+            AnimatedBuilder(
+              animation: bannerController,
+              builder: (context, _) {
+                final slides = bannerController.slides;
+                if (slides.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return BannerPager(
+                  controller: bannerController.pageController,
+                  slides: slides,
+                  currentIndex: bannerController.currentIndex,
                   isDarkMode: isDarkMode,
-                  child: _CollectionStatsCard(
-                    stats: stats,
-                    highlightColor: highlightColor,
+                  pageViewHeight: bannerHeight,
+                  onPageChanged: bannerController.onPageChanged,
+                );
+              },
+            ),
+            const SizedBox(height: DashboardThemeTokens.spacing12),
+            TodayPickupCard(
+              surfaceColor: surfaceColor,
+              outlineColor: outlineColor,
+              isDarkMode: isDarkMode,
+              textColor: textColor,
+              secondaryTextColor: secondaryTextColor,
+              refreshSignal: pickupRefresh,
+            ),
+            AnimatedBuilder(
+              animation: trackController,
+              builder: (context, _) {
+                final stats = _Stats.fromSummary(
+                  trackController,
+                  trackController.currentSummary,
+                  localizations,
+                );
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: DashboardThemeTokens.spacing16,
+                  ),
+                  child: GestureDetector(
+                    onTap: onStatsTap,
+                    child: SectionCard(
+                      surfaceColor: surfaceColor,
+                      outlineColor: outlineColor,
+                      isDarkMode: isDarkMode,
+                      child: _CollectionStatsCard(
+                        stats: stats,
+                        highlightColor: highlightColor,
+                        textColor: textColor,
+                        secondaryTextColor: secondaryTextColor,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: DashboardThemeTokens.spacing16),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                DashboardThemeTokens.spacing16,
+                0,
+                DashboardThemeTokens.spacing16,
+                DashboardThemeTokens.spacing32,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    localizations.quickActions,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: DashboardThemeTokens.spacing12),
+                  QuickActionGrid(
+                    actions: quickActions,
+                    isDarkMode: isDarkMode,
+                    surfaceColor: surfaceColor,
                     textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
                   ),
-                ),
+                ],
               ),
-            );
-          },
-        ),
-        const SizedBox(height: DashboardThemeTokens.spacing16),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(
-              DashboardThemeTokens.spacing16,
-              0,
-              DashboardThemeTokens.spacing16,
-              DashboardThemeTokens.spacing32,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  localizations.quickActions,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(height: DashboardThemeTokens.spacing12),
-                QuickActionGrid(
-                  actions: quickActions,
-                  isDarkMode: isDarkMode,
-                  surfaceColor: surfaceColor,
-                  textColor: textColor,
-                ),
-              ],
-            ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -215,14 +232,14 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(width: DashboardThemeTokens.spacing12),
           Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    localizations.homeTitle,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: textColor,
-                      fontSize: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  localizations.homeTitle,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: textColor,
+                    fontSize: 20,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.4,
                   ),
@@ -243,10 +260,12 @@ class _Header extends StatelessWidget {
           _NotificationBell(
             controller: notificationController,
             iconColor: highlightColor,
-            backgroundColor:
-                isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.05),
-            borderColor:
-                isDarkMode ? Colors.white.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.1),
+            backgroundColor: isDarkMode
+                ? Colors.white.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: 0.05),
+            borderColor: isDarkMode
+                ? Colors.white.withValues(alpha: 0.25)
+                : Colors.black.withValues(alpha: 0.1),
             localizations: localizations,
           ),
         ],
@@ -275,7 +294,8 @@ class _Stats {
     final weightFormatter = controller.weightFormatter;
     final data = summary ?? WasteSummary.zero(controller.selectedDate);
     final hasData = data.totalNetWeight > 0;
-    final String periodLabel = controller.periodLabel(controller.selectedPeriod);
+    final String periodLabel =
+        controller.periodLabel(controller.selectedPeriod);
     final String primaryLabel = hasData
         ? localizations.wasteCollectedLabel(periodLabel)
         : localizations.noWasteRecorded;
@@ -300,8 +320,7 @@ class _Stats {
         RadialBarData(
           label: 'Mixed',
           value: data.mixWeight,
-          valueLabel:
-              'Mixed ${weightFormatter.format(data.mixWeight)} kg',
+          valueLabel: 'Mixed ${weightFormatter.format(data.mixWeight)} kg',
           color: const Color(0xFFF57F17),
         ),
       ],
@@ -395,8 +414,9 @@ class _CollectionStatsCard extends StatelessWidget {
                   spacing: 12,
                   runSpacing: 6,
                   alignment: WrapAlignment.start,
-                  children:
-                      stats.progressItems.map((item) => buildSwatch(item)).toList(),
+                  children: stats.progressItems
+                      .map((item) => buildSwatch(item))
+                      .toList(),
                 ),
               ),
             ],
@@ -495,29 +515,29 @@ class _NotificationBell extends StatelessWidget {
       await showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.notifications_none_rounded,
-              color: theme.colorScheme.primary,
-              size: 48,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              localizations.notificationsCaughtUp,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+        builder: (sheetContext) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.notifications_none_rounded,
+                color: theme.colorScheme.primary,
+                size: 48,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              localizations.notificationsWaiting,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              const SizedBox(height: 16),
+              Text(
+                localizations.notificationsCaughtUp,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                localizations.notificationsWaiting,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 textAlign: TextAlign.center,
               ),

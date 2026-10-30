@@ -114,10 +114,12 @@ class SupervisorNavItem {
     required this.icon,
     required this.label,
     this.iconAsset,
+    this.badgeCount = 0,
   });
 
   final IconData icon;
   final String label;
+  final int badgeCount;
 
   /// Optional raster icon. When set, the image is rendered in place of [icon]
   /// (used for the Profile tab's avatar).
@@ -137,8 +139,9 @@ class _AnimatedNavTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        selected ? const ui.Color.fromARGB(255, 0, 94, 175) : SupervisorTheme.strongText;
+    final color = selected
+        ? const ui.Color.fromARGB(255, 0, 94, 175)
+        : SupervisorTheme.strongText;
 
     return InkResponse(
       onTap: onTap,
@@ -165,17 +168,21 @@ class _AnimatedNavTab extends StatelessWidget {
             scale: selected ? 1.12 : 1,
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutBack,
-            child: item.iconAsset != null
-                ? Opacity(
-                    opacity: selected ? 1 : 0.86,
-                    child: Image.asset(
-                      item.iconAsset!,
-                      width: 26,
-                      height: 26,
-                      fit: BoxFit.contain,
-                    ),
-                  )
-                : Icon(item.icon, color: color, size: 24),
+            child: Badge.count(
+                count: item.badgeCount,
+                isLabelVisible: item.badgeCount > 0,
+                backgroundColor: SupervisorTheme.accent,
+                child: item.iconAsset != null
+                    ? Opacity(
+                        opacity: selected ? 1 : 0.86,
+                        child: Image.asset(
+                          item.iconAsset!,
+                          width: 26,
+                          height: 26,
+                          fit: BoxFit.contain,
+                        ),
+                      )
+                    : Icon(item.icon, color: color, size: 24)),
           ),
           const SizedBox(height: 3),
           Text(

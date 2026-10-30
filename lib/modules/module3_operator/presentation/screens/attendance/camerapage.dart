@@ -8,6 +8,7 @@ import 'package:iwms_private_app/core/api_config.dart';
 import 'package:iwms_private_app/core/di.dart';
 import 'package:iwms_private_app/core/ui/app_flash.dart';
 import 'package:iwms_private_app/data/repositories/auth_repository.dart';
+import 'package:iwms_private_app/data/repositories/face_config_repository.dart';
 import 'package:iwms_private_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_private_app/modules/module3_operator/offline/offline_attendance.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -406,6 +407,21 @@ class _CameraScreenState extends State<CameraScreen>
 
   Future<void> _sendDataToBackend() async {
     if (_image == null) return;
+
+    // The server declares which face engine is active and whether it is
+    // usable (it can be switched in the backend .env without an app release).
+    // If it has already told us it is down, say so instead of uploading a
+    // selfie that cannot be matched. Never blocks when the config is
+    // unreachable — the fallback is permissive and the server re-checks.
+    final faceConfig = await FaceConfigRepository().load();
+    if (!faceConfig.ready) {
+      final message = faceConfig.reason?.trim().isNotEmpty == true
+          ? faceConfig.reason!
+          : 'Face attendance is unavailable right now. Please try again later.';
+      _showError(message);
+      await _speak(message);
+      return;
+    }
 
     if (mounted) {
       setState(() => _isLoading = true);

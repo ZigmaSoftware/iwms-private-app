@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:iwms_private_app/data/models/trip_retrip_models.dart';
@@ -28,7 +30,8 @@ class SupervisorRetripRequestsPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: SupervisorTheme.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: SupervisorTheme.warning.withValues(alpha: 0.4)),
+        border:
+            Border.all(color: SupervisorTheme.warning.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
             color: SupervisorTheme.warning.withValues(alpha: 0.15),
@@ -141,6 +144,10 @@ class _RetripRow extends StatelessWidget {
                 color: SupervisorTheme.mutedText,
               ),
             ),
+            if (request.expiresAt != null) ...[
+              const SizedBox(height: 5),
+              _RetripDeadline(request: request),
+            ],
             if (request.reason.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(
@@ -195,6 +202,55 @@ class _RetripRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RetripDeadline extends StatefulWidget {
+  const _RetripDeadline({required this.request});
+
+  final TripRetripRequest request;
+
+  @override
+  State<_RetripDeadline> createState() => _RetripDeadlineState();
+}
+
+class _RetripDeadlineState extends State<_RetripDeadline> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.request.remaining();
+    final urgent = remaining != null && remaining.inMinutes < 10;
+    return Row(
+      children: [
+        Icon(Icons.timer_outlined,
+            size: 14,
+            color: urgent ? SupervisorTheme.danger : SupervisorTheme.warning),
+        const SizedBox(width: 4),
+        Text(
+          widget.request.expiryLabel(),
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: urgent ? SupervisorTheme.danger : SupervisorTheme.warning,
+          ),
+        ),
+      ],
     );
   }
 }
